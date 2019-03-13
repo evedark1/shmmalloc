@@ -5,21 +5,22 @@
 #include <string.h>
 #include "shm_context.h"
 #include "shm_util.h"
-#include "shm_op_wrapper.h"
 
 struct shm_malloc_context local_context;
 
-static inline void *mmap_arena(struct shm_shared_context *context, uint32_t index)
+static void shm_exit()
 {
-    struct shm_arena *arena = context->arenas + index;
-    assert(arena->type != ARENA_TYPE_EMPTY && arena->type != ARENA_TYPE_CONTEXT);
-    int err = 0;
-    return shm_do_shmmap(arena->key, arena->size, false, &err);
+    if(local_context.shared_context != NULL)
+        exit_shared_context(local_context.shared_context);
 }
 
 int shm_init(const char *path, int create)
 {
     memset(&local_context, 0, sizeof(local_context));
+    if((local_context.path = copystr(path)) == NULL)
+        return -ENOMEM;
+    if(atexit(shm_exit) != 0)
+        return -1;
 
     if((local_context.shared_context = init_shared_context(path, create)) == NULL)
         return -1;
@@ -31,9 +32,6 @@ int shm_init(const char *path, int create)
             local_context.arena_addrs[i] = mmap_arena(local_context.shared_context, i);
     }
     unlock_context(local_context.shared_context);
-
-    if((local_context.path = copystr(path)) == NULL)
-        return -ENOMEM;
 
     return 0;
 }

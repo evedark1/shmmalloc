@@ -76,7 +76,7 @@ struct chunk_header {
 
 struct shm_arena {
     uint32_t type;
-    key_t key;
+    int shmid;
     uint32_t index;
     size_t size;
     uint64_t chunks[SHM_ARENA_CHUNK_SIZE];
@@ -84,9 +84,11 @@ struct shm_arena {
 
 struct shm_shared_context {
     uint32_t init_flag;
+    key_t key;
+    unsigned count;
     uint64_t user_data;
-    pthread_mutex_t mutex;	// locker for all shared memory allocator
 
+    pthread_mutex_t mutex;	// locker for all shared memory allocator
     struct shm_arena arenas[SHM_ARENA_MAX]; // 0 used by self
 };
 

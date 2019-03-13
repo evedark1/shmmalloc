@@ -16,6 +16,13 @@ static inline unsigned ffs_u64(unsigned long long bit) {
 }
 #endif
 
+static inline unsigned atomic_add_and_fetch(unsigned *ptr, unsigned val) {
+    return __sync_add_and_fetch(ptr, val);
+}
+
+static inline unsigned atomic_sub_and_fetch(unsigned *ptr, unsigned val) {
+    return __sync_sub_and_fetch(ptr, val);
+}
 
 #ifdef __cplusplus
 }

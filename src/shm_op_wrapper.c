@@ -10,20 +10,22 @@
 #include "shm_logger.h"
 #include "shm_op_wrapper.h"
 
-void *shm_do_shmmap(key_t key, size_t size, bool create_segment, int *err_no)
+void *shm_mmap(key_t key, size_t size, bool create_segment, int *id, int *err_no)
 {
-    int shmid;
+    int shmid = *id;
     void *addr = NULL;
 
-    if (create_segment) {
-        shmid = shmget(key, size, IPC_CREAT | 0666);
-    } else {
-        shmid = shmget(key, 0, 0666);
+    if(key > 0) {
+        if (create_segment) {
+            shmid = shmget(key, size, IPC_CREAT | 0666);
+        } else {
+            shmid = shmget(key, 0, 0666);
+        }
     }
-    if (shmid < 0) {
+    if (shmid <= 0) {
         *err_no = errno != 0 ? errno : EPERM;
         logError("file: "__FILE__", line: %d, "
-                "shmget with key %08x fail, "
+                "shmget with key 0x%08x fail, "
                 "errno: %d, error info: %s", __LINE__,
                 key, *err_no, strerror(*err_no));
         return NULL;
@@ -33,12 +35,13 @@ void *shm_do_shmmap(key_t key, size_t size, bool create_segment, int *err_no)
     if (addr == NULL || addr == (void *)-1) {
         *err_no = errno != 0 ? errno : EPERM;
         logError("file: "__FILE__", line: %d, "
-                "shmat with key %08x fail, "
+                "shmat with shmid %u fail, "
                 "errno: %d, error info: %s", __LINE__,
-                key, *err_no, strerror(*err_no));
+                shmid, *err_no, strerror(*err_no));
         return NULL;
     }
 
+    *id = shmid;
     *err_no = 0;
     return addr;
 }
@@ -81,8 +84,7 @@ static int write_file(const char *filename, const char *buff, int file_size)
     return 0;
 }
 
-static int shm_get_key(const char *filename, int proj_id,
-        key_t *key)
+int shm_get_key(const char *filename, int proj_id, key_t *key)
 {
     int result;
     if (access(filename, F_OK) != 0) {
@@ -121,16 +123,6 @@ static int shm_get_key(const char *filename, int proj_id,
     return 0;
 }
 
-void *shm_mmap(const char *filename,
-        int proj_id, size_t size, key_t *key,
-        bool create_segment, int *err_no)
-{
-    if ((*err_no=shm_get_key(filename, proj_id, key)) != 0) {
-        return NULL;
-    }
-    return shm_do_shmmap(*key, size, create_segment, err_no);
-}
-
 int shm_munmap(void *addr, size_t size)
 {
     int result;
@@ -139,44 +131,23 @@ int shm_munmap(void *addr, size_t size)
     } else {
         result = errno != 0 ? errno : EACCES;
         logError("file: "__FILE__", line: %d, "
-                "munmap addr: %p, size: %"PRId64" fail, "
+                "munmap addr: %p, size: %zu fail, "
                 "errno: %d, error info: %s", __LINE__,
                 addr, size, errno, strerror(errno));
     }
     return result;
 }
 
-int shm_remove(key_t key)
+int shm_remove(int shmid)
 {
     int result;
-    int shmid;
-
-    shmid = shmget(key, 0, 0666);
-    if (shmid < 0) {
+    if (shmctl(shmid, IPC_RMID, NULL) != 0) {
         result = errno != 0 ? errno : EACCES;
         logError("file: "__FILE__", line: %d, "
-                "shmget with key %08x fail, "
-                "errno: %d, error info: %s", __LINE__,
-                key, errno, strerror(errno));
+                 "remove shm with shmid %u fail, "
+                 "errno: %d, error info: %s", __LINE__,
+                 shmid, errno, strerror(errno));
         return result;
     }
-
-     if (shmctl(shmid, IPC_RMID, NULL) != 0) {
-        result = errno != 0 ? errno : EACCES;
-        logError("file: "__FILE__", line: %d, "
-                "remove shm with key %08x fail, "
-                "errno: %d, error info: %s", __LINE__,
-                key, errno, strerror(errno));
-        return result;
-     }
     return 0;
-}
-
-bool shm_exists(const char *filename, int proj_id)
-{
-    key_t key;
-    if (shm_get_key(filename, proj_id, &key) != 0) {
-        return false;
-    }
-    return shmget(key, 0, 0666) >= 0;
 }

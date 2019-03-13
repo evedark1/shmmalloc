@@ -16,28 +16,24 @@ extern "C" {
 /**
 shmget & shmat
 parameters:
-    key: shm key
+    key: shm key, if key <= 0, use id as shmid input
     size: share memory size
     create_segment: if create segment when segment not exist
+    id: shmid input and output
     err_no: return errno
 return share memory pointer, NULL for fail
 */
-extern void *shm_do_shmmap(key_t key, size_t size, bool create_segment, int *err_no);
+extern void *shm_mmap(key_t key, size_t size, bool create_segment, int *id, int *err_no);
 
 /**
-shmget & shmat
+get shm key to use
 parameters:
-	filename: the filename
-	proj_id: the project id to generate key
-    size: the share memory size
+    filename: the filename
+    proj_id: the project id to generate key
     key: return the key
-    create_segment: if create segment when segment not exist
-    err_no: return errno
-return share memory pointer, NULL for fail
+return: errno, 0 for success, != 0 fail
 */
-extern void *shm_mmap(const char *filename,
-        int proj_id, size_t size, key_t *key,
-        bool create_segment, int *err_no);
+extern int shm_get_key(const char *filename, int proj_id, key_t *key);
 
 /**
 shmdt
@@ -49,21 +45,12 @@ return: errno, 0 for success, != 0 fail
 extern int shm_munmap(void *addr, size_t size);
 
 /**
-remove shm
+remove shm, set IPC_RMID flag
 parameters:
-    key: shm key
+    shmid: shmid to change
 return: errno, 0 for success, != 0 fail
 */
-extern int shm_remove(key_t key);
-
-/**
-if shm exists
-parameters:
-	filename: the filename
-	proj_id: the project id to generate key
-return: errno, 0 for success, != 0 fail
-*/
-extern bool shm_exists(const char *filename, const int proj_id);
+extern int shm_remove(int shmid);
 
 #ifdef __cplusplus
 }
