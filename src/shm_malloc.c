@@ -61,7 +61,26 @@ void shm_free(uint64_t pos)
 
 uint64_t shm_realloc(uint64_t pos, size_t size)
 {
-    return SHM_NULL;
+    if(pos == SHM_NULL)
+        return shm_malloc(size);
+    uint32_t index = pos2index(pos);
+    uint32_t offset = pos2offset(pos);
+    struct shm_shared_context *context = local_context.shared_context;
+
+    uint64_t ret = pos;
+    lock_context(local_context.shared_context);
+    size_t checksize = check_arena(context, index, offset);
+    if(size > checksize && checksize != 0) {
+        ret = malloc_arena(context, size);
+        if(ret != SHM_NULL) {
+            void *src = get_or_update_addr(pos);
+            void *dest = get_or_update_addr(ret);
+            memcpy(dest, src, checksize);
+            free_arena(context, index, offset);
+        }
+    }
+    unlock_context(local_context.shared_context);
+    return ret;
 }
 
 void shm_set_userdata(uint64_t data)

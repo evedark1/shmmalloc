@@ -182,6 +182,39 @@ void free_arena(struct shm_shared_context *context, uint32_t index, uint32_t off
     }
 }
 
+size_t check_arena(struct shm_shared_context *context, uint32_t index, uint32_t offset)
+{
+    if(!is_arena_valid(context, index)) {
+        logNotice("check arena index error, %u %u", index, offset);
+        return 0;
+    }
+    size_t ret = 0;
+
+    struct shm_arena *arena = context->arenas + index;
+    uint64_t chunk_pos = SHM_NULL;
+    struct chunk_header *chunk_header = NULL;
+
+    switch(arena->type) {
+    case ARENA_TYPE_CONTEXT:
+    case ARENA_TYPE_CHUNK:
+        chunk_pos = get_arena_chunk(arena, offset);
+        if(chunk_pos != SHM_NULL) {
+            chunk_header = get_or_update_addr(chunk_pos);
+            ret = check_chunk(chunk_header, offset);
+        } else {
+            logNotice("check arena offset error, %u %u", index, offset);
+        }
+        break;
+    case ARENA_TYPE_LARGE:
+        ret = arena->size;
+        break;
+    default:
+        assert(0);
+        break;
+    }
+    return ret;
+}
+
 void lock_context(struct shm_shared_context *context)
 {
     int err = pthread_mutex_lock(&context->mutex);

@@ -20,6 +20,7 @@ struct run_config {
 extern const struct run_config *find_run_config(size_t size);
 
 extern void free_chunk(struct chunk_header *chunk, uint32_t offset);
+extern size_t check_chunk(struct chunk_header *chunk, uint32_t offset);
 
 #ifdef __cplusplus
 }

@@ -64,6 +64,17 @@ extern const struct run_config *find_run_config(size_t size)
     return conf;
 }
 
+static inline struct chunk_run *find_run(struct chunk_header *chunk, uint32_t offset)
+{
+    assert(chunk->type == CHUNK_TYPE_SMALL);
+    uint32_t chunk_offset = offset - pos2offset(chunk->pos);
+    uint32_t runidx = chunk_offset / SHM_RUN_UNIT_SIZE - SHM_CHUNK_HEADER_HOLD;
+    if(runidx >= SHM_CHUNK_RUN_SIZE || !bitmap_get(chunk->small.bitmap, runidx)) {
+        return NULL;
+    }
+    return chunk->small.runs + runidx;
+}
+
 static inline uint32_t malloc_run(struct chunk_run *run)
 {
     assert(run->elemtype != 0);
@@ -87,15 +98,12 @@ static inline void free_run(struct chunk_run *run, uint32_t offset)
 
 static void free_chunk_small(struct chunk_header *chunk, uint32_t offset)
 {
-    union shm_pointer self;
-    self.pos = chunk->pos;
-    uint32_t chunk_offset = offset - self.segment.offset;
+    uint32_t chunk_offset = offset - pos2offset(chunk->pos);
     uint32_t runidx = chunk_offset / SHM_RUN_UNIT_SIZE - SHM_CHUNK_HEADER_HOLD;
     if(runidx >= SHM_CHUNK_RUN_SIZE || !bitmap_get(chunk->small.bitmap, runidx)) {
         logNotice("free chunk small offset error");
         return;
     }
-
     free_run(chunk->small.runs + runidx, chunk_offset % SHM_RUN_UNIT_SIZE);
 }
 
@@ -106,10 +114,34 @@ void free_chunk(struct chunk_header *chunk, uint32_t offset)
         free_chunk_small(chunk, offset);
         break;
     case CHUNK_TYPE_MEDIUM:
-        //TODO: chunk media
+        //TODO: chunk medium
         break;
     default:
         logWarning("free chunk type invalid %d", chunk->type);
         break;
     }
+}
+
+static size_t check_chunk_small(struct chunk_header *chunk, uint32_t offset)
+{
+    struct chunk_run *run = find_run(chunk, offset);
+    const struct run_config *conf = &run_config_list[run->elemtype];
+    return conf->elemsize;
+}
+
+size_t check_chunk(struct chunk_header *chunk, uint32_t offset)
+{
+    size_t ret = 0;
+    switch(chunk->type) {
+    case CHUNK_TYPE_SMALL:
+        ret = check_chunk_small(chunk, offset);
+        break;
+    case CHUNK_TYPE_MEDIUM:
+        //TODO: chunk medium
+        break;
+    default:
+        logWarning("free chunk type invalid %d", chunk->type);
+        break;
+    }
+    return ret;
 }

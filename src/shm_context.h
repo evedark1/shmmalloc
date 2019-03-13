@@ -13,6 +13,7 @@ extern void *mmap_arena(struct shm_shared_context *context, uint32_t index);
 
 extern uint64_t malloc_arena(struct shm_shared_context *context, size_t size);
 extern void free_arena(struct shm_shared_context *context, uint32_t index, uint32_t offset);
+extern size_t check_arena(struct shm_shared_context *context, uint32_t index, uint32_t offset);
 
 extern void lock_context(struct shm_shared_context *context);
 extern void unlock_context(struct shm_shared_context *context);

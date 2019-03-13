@@ -44,6 +44,20 @@ static inline uint64_t index2pos(uint32_t index, uint32_t offset)
     return pointer.pos;
 }
 
+static inline uint32_t pos2index(uint64_t pos)
+{
+    union shm_pointer pointer;
+    pointer.pos = pos;
+    return pointer.segment.index;
+}
+
+static inline uint32_t pos2offset(uint64_t pos)
+{
+    union shm_pointer pointer;
+    pointer.pos = pos;
+    return pointer.segment.offset;
+}
+
 struct shm_list {
     uint64_t next;
     uint64_t prev;
