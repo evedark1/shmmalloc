@@ -39,10 +39,9 @@ extern int shm_get_key(const char *filename, int proj_id, key_t *key);
 shmdt
 parameters:
     addr: the address to munmap
-    size: the share memory size
 return: errno, 0 for success, != 0 fail
 */
-extern int shm_munmap(void *addr, size_t size);
+extern int shm_munmap(void *addr);
 
 /**
 remove shm, set IPC_RMID flag

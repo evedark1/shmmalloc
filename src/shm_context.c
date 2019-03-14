@@ -79,6 +79,11 @@ void *mmap_arena(struct shm_shared_context *context, uint32_t index)
     return shm_mmap(0, arena->size, false, &shmid, &err);
 }
 
+void munmap_arena(void *addr)
+{
+    shm_munmap(addr);
+}
+
 static struct shm_arena *new_arena(struct shm_shared_context *context, uint32_t type, size_t size)
 {
     assert(size / SHM_CHUNK_UNIT_SIZE == 0);
@@ -117,7 +122,7 @@ static struct shm_arena *new_arena(struct shm_shared_context *context, uint32_t 
     arena->shmid = shmid;
     arena->index = index;
     arena->size = size;
-    update_arena_addr(index, addr);
+    set_arena_addr(index, addr, shmid);
     logInfo("new arena create, index %u key %x shmid %u size %zu", index, key, shmid, size);
     return arena;
 }
@@ -125,13 +130,12 @@ static struct shm_arena *new_arena(struct shm_shared_context *context, uint32_t 
 static void delete_arena(struct shm_shared_context *context, uint32_t index)
 {
     struct shm_arena *arena = context->arenas + index;
-    size_t size = arena->size;
     void *addr = get_arena_addr(index);
     assert(addr != NULL);
 
     memset(arena, 0, sizeof(struct shm_arena));
-    update_arena_addr(index, NULL);
-    shm_munmap(addr, size);
+    clear_arena_addr(index);
+    shm_munmap(addr);
 }
 
 uint64_t malloc_arena(struct shm_shared_context *context, size_t size)
@@ -139,8 +143,8 @@ uint64_t malloc_arena(struct shm_shared_context *context, size_t size)
     uint64_t ret = 0;
     if(size <= CHUNK_SMALL_LIMIT) {
         //TODO: small alloc
-    } else if(size <= CHUNK_MEDIA_LIMIT) {
-        //TODO: media alloc
+    } else if(size <= CHUNK_MEDIUM_LIMIT) {
+        //TODO: medium alloc
     } else {
         size_t asize = align_size(size, SHM_CHUNK_UNIT_SIZE);
         struct shm_arena *arena = new_arena(context, ARENA_TYPE_LARGE, asize);

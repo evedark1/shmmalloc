@@ -106,10 +106,15 @@ struct shm_shared_context {
     struct shm_arena arenas[SHM_ARENA_MAX]; // 0 used by self
 };
 
+struct shm_arena_addr {
+    void *addr;
+    int shmid;
+};
+
 struct shm_malloc_context {
     char *path;
     struct shm_shared_context *shared_context;
-    void *arena_addrs[SHM_ARENA_MAX];
+    struct shm_arena_addr arena_addrs[SHM_ARENA_MAX];
 };
 
 #ifdef __cplusplus

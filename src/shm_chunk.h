@@ -13,7 +13,7 @@ struct run_config {
 };
 
 #define CHUNK_SMALL_LIMIT 2048			// 2 KB
-#define CHUNK_MEDIA_LIMIT (1024 * 1024) // 1 MB
+#define CHUNK_MEDIUM_LIMIT (1024 * 1024) // 1 MB
 
 #define RUN_CONFIG_SIZE 15
 // run config info, start from 1

@@ -24,14 +24,18 @@ int shm_init(const char *path, int create)
 
     if((local_context.shared_context = init_shared_context(path, create)) == NULL)
         return -1;
-    local_context.arena_addrs[0] = local_context.shared_context;
 
-    lock_context(local_context.shared_context);
+    struct shm_shared_context *context = local_context.shared_context;
+    lock_context(context);
+    local_context.arena_addrs[0].addr = local_context.shared_context;
+    local_context.arena_addrs[0].shmid = context->arenas[0].shmid;
     for(uint32_t i = 1; i < SHM_ARENA_MAX; i++) {
-        if(is_arena_valid(local_context.shared_context, i))
-            local_context.arena_addrs[i] = mmap_arena(local_context.shared_context, i);
+        if(is_arena_valid(context, i)) {
+            local_context.arena_addrs[i].addr = mmap_arena(context, i);
+            local_context.arena_addrs[i].shmid = context->arenas[i].shmid;
+        }
     }
-    unlock_context(local_context.shared_context);
+    unlock_context(context);
 
     return 0;
 }
@@ -101,17 +105,10 @@ void *shm_get_addr(uint64_t pos)
     if(index >= SHM_ARENA_MAX)
         return NULL;
 
-    void *base = local_context.arena_addrs[index];
-    if(base == NULL) {
-        lock_context(local_context.shared_context);
+    lock_context(local_context.shared_context);
+    void *base = get_or_update_arena_addr(pointer.segment.index);
+    unlock_context(local_context.shared_context);
 
-        if(is_arena_valid(local_context.shared_context, index)) {
-            base = mmap_arena(local_context.shared_context, index);
-            local_context.arena_addrs[index] = base;
-        }
-
-        unlock_context(local_context.shared_context);
-    }
     if(base == NULL)
         return NULL;
     return (char*)base + pointer.segment.offset;
@@ -119,14 +116,21 @@ void *shm_get_addr(uint64_t pos)
 
 void *get_or_update_arena_addr(uint32_t index)
 {
-    void *base = local_context.arena_addrs[index];
-    if(base == NULL) {
-        if(is_arena_valid(local_context.shared_context, index)) {
-            base = mmap_arena(local_context.shared_context, index);
-            local_context.arena_addrs[index] = base;
+    struct shm_shared_context *context = local_context.shared_context;
+    struct shm_arena_addr *arena = local_context.arena_addrs + index;
+    if(arena->shmid != context->arenas[index].shmid) {
+        if(arena->shmid != 0) {
+            assert(arena->addr != NULL);
+            munmap_arena(arena->addr);
+            arena->addr = NULL;
+            arena->shmid = 0;
+        }
+        if(is_arena_valid(context, index)) {
+            arena->addr = mmap_arena(context, index);
+            arena->shmid = context->arenas[index].shmid;
         }
     }
-    return base;
+    return arena->addr;
 }
 
 void *get_or_update_addr(uint64_t pos)

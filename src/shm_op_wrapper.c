@@ -123,7 +123,7 @@ int shm_get_key(const char *filename, int proj_id, key_t *key)
     return 0;
 }
 
-int shm_munmap(void *addr, size_t size)
+int shm_munmap(void *addr)
 {
     int result;
     if (shmdt(addr) == 0) {
@@ -131,9 +131,9 @@ int shm_munmap(void *addr, size_t size)
     } else {
         result = errno != 0 ? errno : EACCES;
         logError("file: "__FILE__", line: %d, "
-                "munmap addr: %p, size: %zu fail, "
+                "munmap addr: %p fail, "
                 "errno: %d, error info: %s", __LINE__,
-                addr, size, errno, strerror(errno));
+                addr, errno, strerror(errno));
     }
     return result;
 }

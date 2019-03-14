@@ -14,12 +14,19 @@ extern void *get_or_update_arena_addr(uint32_t index);
 
 static inline void *get_arena_addr(uint32_t index)
 {
-    return local_context.arena_addrs[index];
+    return local_context.arena_addrs[index].addr;
 }
 
-static inline void update_arena_addr(uint32_t index, void *addr)
+static inline void set_arena_addr(uint32_t index, void *addr, int shmid)
 {
-    local_context.arena_addrs[index] = addr;
+    local_context.arena_addrs[index].addr = addr;
+    local_context.arena_addrs[index].shmid= shmid;
+}
+
+static inline void clear_arena_addr(uint32_t index)
+{
+    local_context.arena_addrs[index].addr = NULL;
+    local_context.arena_addrs[index].shmid= 0;
 }
 
 /*
