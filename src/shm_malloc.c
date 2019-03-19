@@ -55,11 +55,11 @@ void shm_free(uint64_t pos)
 {
     if(pos == SHM_NULL)
         return;
-    union shm_pointer pointer;
-    pointer.pos = pos;
+    uint32_t index = pos2index(pos);
+    uint32_t offset = pos2offset(pos);
 
     lock_context(local_context.shared_context);
-    free_arena(local_context.shared_context, pointer.segment.index, pointer.segment.offset);
+    free_arena(local_context.shared_context, index, offset);
     unlock_context(local_context.shared_context);
 }
 
@@ -99,19 +99,17 @@ uint64_t shm_get_userdata()
 
 void *shm_get_addr(uint64_t pos)
 {
-    union shm_pointer pointer;
-    pointer.pos = pos;
-    uint32_t index = pointer.segment.index;
+    uint32_t index = pos2index(pos);
     if(index >= SHM_ARENA_MAX)
         return NULL;
 
     lock_context(local_context.shared_context);
-    void *base = get_or_update_arena_addr(pointer.segment.index);
+    void *base = get_or_update_arena_addr(index);
     unlock_context(local_context.shared_context);
 
     if(base == NULL)
         return NULL;
-    return (char*)base + pointer.segment.offset;
+    return (char*)base + pos2offset(pos);
 }
 
 void *get_or_update_arena_addr(uint32_t index)
@@ -135,10 +133,9 @@ void *get_or_update_arena_addr(uint32_t index)
 
 void *get_or_update_addr(uint64_t pos)
 {
-    union shm_pointer pointer;
-    pointer.pos = pos;
-    void *base = get_or_update_arena_addr(pointer.segment.index);
+    uint32_t index = pos2index(pos);
+    void *base = get_or_update_arena_addr(index);
     if(base == NULL)
         return NULL;
-    return (char*)base + pointer.segment.offset;
+    return (char*)base + pos2offset(pos);
 }

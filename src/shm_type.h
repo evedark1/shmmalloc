@@ -26,36 +26,19 @@ extern "C" {
 
 #define SHM_SHARED_CONTEXT_SIZE SHM_CHUNK_UNIT_SIZE
 
-#define SHM_ARENA_MAX 256
-
-union shm_pointer {
-    uint64_t pos;
-    struct {
-        uint32_t index :32;
-        uint32_t offset :32;
-    } segment;
-};
-
 static inline uint64_t index2pos(uint32_t index, uint32_t offset)
 {
-    union shm_pointer pointer;
-    pointer.segment.index = index;
-    pointer.segment.offset = offset;
-    return pointer.pos;
+    return (uint64_t)index << 32 | (uint64_t)offset;
 }
 
 static inline uint32_t pos2index(uint64_t pos)
 {
-    union shm_pointer pointer;
-    pointer.pos = pos;
-    return pointer.segment.index;
+    return (uint32_t)(pos >> 32);
 }
 
 static inline uint32_t pos2offset(uint64_t pos)
 {
-    union shm_pointer pointer;
-    pointer.pos = pos;
-    return pointer.segment.offset;
+    return (uint32_t)pos;
 }
 
 struct shm_list {
@@ -63,8 +46,19 @@ struct shm_list {
     uint64_t prev;
 };
 
+#define CHUNK_SMALL_LIMIT 2048			// 2 KB
+#define CHUNK_MEDIUM_LIMIT (1024 * 1024) // 1 MB
+#define RUN_CONFIG_SIZE 15
+
+struct run_config {
+    uint32_t index;
+    uint32_t elemsize;
+    uint32_t regsize;
+};
+
 struct chunk_run {
     uint32_t elemtype;
+    uint64_t pos;
     bitmap_t bitmap[BITMAP_BITS2GROUPS(SHM_RUN_REG_SIZE)];
 };
 
@@ -95,6 +89,8 @@ struct shm_arena {
     size_t size;
     uint64_t chunks[SHM_ARENA_CHUNK_SIZE];
 };
+
+#define SHM_ARENA_MAX 256
 
 struct shm_shared_context {
     uint32_t init_flag;

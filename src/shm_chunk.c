@@ -1,31 +1,33 @@
 #include "shm_chunk.h"
 #include <assert.h>
+#include <string.h>
 #include "shm_logger.h"
 #include "shm_util.h"
+#include "shm_malloc_inc.h"
 
 static_assert(sizeof(struct chunk_header) <= SHM_RUN_UNIT_SIZE * SHM_CHUNK_HEADER_HOLD, "chunk header too big");
 
-#define RUN_CONFIG_ITEM(elem) {elem, SHM_RUN_UNIT_SIZE / elem}
-const static struct run_config run_config_list[RUN_CONFIG_SIZE] =
+#define RUN_CONFIG_ITEM(index, elem) {index, elem, SHM_RUN_UNIT_SIZE / elem}
+const struct run_config run_config_list[RUN_CONFIG_SIZE] =
 {
-    {0, 0},
+    {0, 0, 0},
     // align 8
-    RUN_CONFIG_ITEM(8),
-    RUN_CONFIG_ITEM(16),
-    RUN_CONFIG_ITEM(32),
-    RUN_CONFIG_ITEM(48),
-    RUN_CONFIG_ITEM(64),
-    RUN_CONFIG_ITEM(96),
+    RUN_CONFIG_ITEM(1, 8),
+    RUN_CONFIG_ITEM(2, 16),
+    RUN_CONFIG_ITEM(3, 32),
+    RUN_CONFIG_ITEM(4, 48),
+    RUN_CONFIG_ITEM(5, 64),
+    RUN_CONFIG_ITEM(6, 96),
     // align 32
-    RUN_CONFIG_ITEM(128),
-    RUN_CONFIG_ITEM(192),
-    RUN_CONFIG_ITEM(256),
-    RUN_CONFIG_ITEM(384),
-    RUN_CONFIG_ITEM(512),
+    RUN_CONFIG_ITEM(7, 128),
+    RUN_CONFIG_ITEM(8, 192),
+    RUN_CONFIG_ITEM(9, 256),
+    RUN_CONFIG_ITEM(10, 384),
+    RUN_CONFIG_ITEM(11, 512),
     // align 128
-    RUN_CONFIG_ITEM(768),
-    RUN_CONFIG_ITEM(1024),
-    RUN_CONFIG_ITEM(2048),
+    RUN_CONFIG_ITEM(12, 768),
+    RUN_CONFIG_ITEM(13, 1024),
+    RUN_CONFIG_ITEM(14, 2048),
 };
 
 // align 8
@@ -47,21 +49,21 @@ const static uint32_t run_table128[16] =
     14, 14, 14, 14, 14, 14, 14, 14,
 };
 
-extern const struct run_config *find_run_config(size_t size)
+uint32_t find_run_config(size_t size)
 {
     assert(size > 0 && size <= CHUNK_SMALL_LIMIT);
-    const struct run_config *conf = NULL;
+    uint32_t ret = 0;
     if(size <= 96) {
         uint32_t idx = (size - 1) / 8;
-        conf = run_config_list + run_table8[idx];
+        ret = run_table8[idx];
     } else if(size <= 512) {
         uint32_t idx = (size - 1) / 32;
-        conf = run_config_list + run_table32[idx];
+        ret = run_table32[idx];
     } else {
         uint32_t idx = (size - 1) / 128;
-        conf = run_config_list + run_table128[idx];
+        ret = run_table128[idx];
     }
-    return conf;
+    return ret;
 }
 
 static inline struct chunk_run *find_run(struct chunk_header *chunk, uint32_t offset)
@@ -105,6 +107,27 @@ static void free_chunk_small(struct chunk_header *chunk, uint32_t offset)
         return;
     }
     free_run(chunk->small.runs + runidx, chunk_offset % SHM_RUN_UNIT_SIZE);
+}
+
+void init_chunk(uint64_t pos, uint32_t type)
+{
+    struct chunk_header *chunk = get_or_update_addr(pos);
+    memset(chunk, 0, sizeof(struct chunk_header));
+    chunk->pos = pos;
+    chunk->type = type;
+}
+
+uint64_t malloc_chunk_small(struct chunk_header *chunk, uint32_t runtype)
+{
+    assert(chunk->type == CHUNK_TYPE_SMALL);
+    int32_t idx = bitmap_sfu(chunk->small.bitmap, SHM_CHUNK_RUN_SIZE);
+    assert(idx < SHM_CHUNK_RUN_SIZE);
+    struct chunk_run *run = chunk->small.runs + idx;
+
+    memset(run, 0, sizeof(struct chunk_run));
+    run->pos = chunk->pos + (idx + SHM_CHUNK_HEADER_HOLD) * SHM_RUN_UNIT_SIZE;
+    run->elemtype = runtype;
+    return run->pos + malloc_run(run);
 }
 
 void free_chunk(struct chunk_header *chunk, uint32_t offset)

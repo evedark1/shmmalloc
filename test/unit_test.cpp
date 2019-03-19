@@ -1,25 +1,25 @@
-#include "shm_chunk.h"
+#include "shm_op_wrapper.h"
 #include <gtest/gtest.h>
 
-TEST(TestChunk, FindRunConfig) {
-    EXPECT_EQ(find_run_config(1)->elemsize, 8);
-    EXPECT_EQ(find_run_config(8)->elemsize, 8);
-    EXPECT_EQ(find_run_config(12)->elemsize, 16);
-    EXPECT_EQ(find_run_config(16)->elemsize, 16);
-    EXPECT_EQ(find_run_config(50)->elemsize, 64);
-    EXPECT_EQ(find_run_config(65)->elemsize, 96);
-    EXPECT_EQ(find_run_config(96)->elemsize, 96);
+TEST(TestShm, Mmap) {
+    const char *path = "/tmp/shm_test";
+    key_t key;
+    int r;
+    r = shm_get_key(path, 0, &key);
+    ASSERT_TRUE(r == 0);
 
-    EXPECT_EQ(find_run_config(97)->elemsize, 128);
-    EXPECT_EQ(find_run_config(128)->elemsize, 128);
-    EXPECT_EQ(find_run_config(180)->elemsize, 192);
-    EXPECT_EQ(find_run_config(200)->elemsize, 256);
-    EXPECT_EQ(find_run_config(512)->elemsize, 512);
+    int shmid = 0;
+    int err = 0;
+    void *addr = shm_mmap(key, 8*1024*1024, true, &shmid, &err);
+    ASSERT_TRUE(addr != NULL);
+    ASSERT_TRUE(shmid > 0);
 
-    EXPECT_EQ(find_run_config(520)->elemsize, 768);
-    EXPECT_EQ(find_run_config(1000)->elemsize, 1024);
-    EXPECT_EQ(find_run_config(1025)->elemsize, 2048);
-    EXPECT_EQ(find_run_config(2048)->elemsize, 2048);
+    memset(addr, 0xab, 8*1024*1024);
+    unsigned char ch = *((unsigned char*)addr + 2*1024*1024);
+    ASSERT_TRUE(ch == 0xab);
+
+    r = shm_remove(shmid);
+    ASSERT_TRUE(r == 0);
 }
 
 int main(int argc, char **argv) {

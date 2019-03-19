@@ -17,8 +17,10 @@ static void init_shm_shared_field(struct shm_shared_context *context, key_t key,
     context->key = key;
     context->count = 0;
     shm_lock_init(&context->mutex);
+    context->arenas[0].type = ARENA_TYPE_CONTEXT;
     context->arenas[0].shmid = shmid;
-    context->arenas[0].size = SHM_SHARED_CONTEXT_SIZE;
+    context->arenas[0].index = 0;
+    context->arenas[0].size = SHM_ARENA_UNIT_SIZE;
 }
 
 struct shm_shared_context *init_shared_context(const char *path, bool create)
@@ -30,7 +32,7 @@ struct shm_shared_context *init_shared_context(const char *path, bool create)
         logError("init shared context get shm key fail, path %s error %d", path, err);
         return NULL;
     }
-    struct shm_shared_context *context = shm_mmap(key, SHM_SHARED_CONTEXT_SIZE, create, &shmid, &err);
+    struct shm_shared_context *context = shm_mmap(key, SHM_ARENA_UNIT_SIZE, create, &shmid, &err);
     if(context == NULL) {
         logError("init shared context path %s error %d", path, err);
         return NULL;
@@ -138,11 +140,65 @@ static void delete_arena(struct shm_shared_context *context, uint32_t index)
     shm_munmap(addr);
 }
 
+static uint64_t new_arena_chunk(struct shm_arena *arena)
+{
+    uint64_t ret = SHM_NULL;
+    uint32_t idx = (arena->type == ARENA_TYPE_CONTEXT) ? 1 : 0;
+    while(idx < SHM_ARENA_CHUNK_SIZE) {
+        if(arena->chunks[idx] == 0) {
+            ret = index2pos(arena->index, idx * SHM_CHUNK_UNIT_SIZE);
+            arena->chunks[idx] = ret;
+            break;
+        }
+        idx++;
+    }
+    return ret;
+}
+
+static uint64_t new_chunk(struct shm_shared_context *context, uint32_t type)
+{
+    uint64_t ret = SHM_NULL;
+    uint32_t emptyIndex = 0;
+    // find arena can alloc chunk
+    for(uint32_t i = 0; i < SHM_ARENA_MAX; i++) {
+        struct shm_arena *arena = context->arenas + i;
+        if(arena->type == ARENA_TYPE_CONTEXT || arena->type == ARENA_TYPE_CONTEXT) {
+            if((ret = new_arena_chunk(arena)) != SHM_NULL)
+                break;
+        } else if(arena->type == ARENA_TYPE_EMPTY) {
+            emptyIndex = i;
+        }
+    }
+
+    // alloc new arena
+    if(ret == SHM_NULL && emptyIndex != 0) {
+        struct shm_arena *arena = new_arena(context, ARENA_TYPE_CHUNK, SHM_ARENA_UNIT_SIZE);
+        if(arena != NULL) {
+            ret = new_arena_chunk(arena);
+            assert(ret != SHM_NULL);
+        }
+    }
+
+    // init new chunk
+    if(ret != SHM_NULL) {
+        init_chunk(ret, type);
+    }
+    return ret;
+}
+
 uint64_t malloc_arena(struct shm_shared_context *context, size_t size)
 {
-    uint64_t ret = 0;
+    uint64_t ret = SHM_NULL;
     if(size <= CHUNK_SMALL_LIMIT) {
-        //TODO: small alloc
+        uint32_t runidx = find_run_config(size);
+        //TODO: find run, find chunk
+        uint64_t chunk_pos = new_chunk(context, CHUNK_TYPE_SMALL);
+        if(chunk_pos == SHM_NULL) {
+            logNotice("malloc arena new chunk full");
+            return SHM_NULL;
+        }
+        ret = malloc_chunk_small(get_or_update_addr(chunk_pos), runidx);
+        assert(ret != SHM_NULL);
     } else if(size <= CHUNK_MEDIUM_LIMIT) {
         //TODO: medium alloc
     } else {
