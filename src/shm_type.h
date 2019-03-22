@@ -57,9 +57,13 @@ struct run_config {
 };
 
 struct chunk_run {
-    uint32_t elemtype;
     uint64_t pos;
-    bitmap_t bitmap[BITMAP_BITS2GROUPS(SHM_RUN_REG_SIZE)];
+    uint32_t conf_index;
+    uint32_t elemsize;
+    uint32_t total;
+
+    uint32_t used;
+    uint32_t free;
 };
 
 struct chunk_small {
