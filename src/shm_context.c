@@ -186,12 +186,35 @@ static uint64_t new_chunk(struct shm_shared_context *context, uint32_t type)
     return ret;
 }
 
+uint64_t try_run_pool(struct shm_shared_context *context, uint32_t runidx)
+{
+    uint64_t run_pos = context->run_pool[runidx].working;
+    if(run_pos == SHM_NULL)
+        return SHM_NULL;
+
+    uint32_t run_offset = run_pos & (uint64_t)(SHM_CHUNK_UNIT_SIZE - 1);
+    uint64_t chunk_pos = run_pos - run_offset;
+    uint32_t run_idx = run_offset2idx(run_offset);
+    struct chunk_header *chunk = get_or_update_addr(chunk_pos);
+    struct chunk_run *run = chunk->small.runs + run_idx;
+    assert(run_pos == run->pos);
+
+    uint32_t offset = malloc_run(run, (char*)chunk + run_offset);
+    if(run_full(run)) {
+        context->run_pool[runidx].working = shm_tree_pop(run_pos);
+    }
+    return run_pos + offset;
+}
+
 uint64_t malloc_arena(struct shm_shared_context *context, size_t size)
 {
     uint64_t ret = SHM_NULL;
     if(size <= CHUNK_SMALL_LIMIT) {
         uint32_t runidx = find_run_config(size);
-        //TODO: find run, find chunk
+        if((ret = try_run_pool(context, runidx)) != SHM_NULL)
+            return ret;
+
+        //TODO: find chunk
         uint64_t chunk_pos = new_chunk(context, CHUNK_TYPE_SMALL);
         if(chunk_pos == SHM_NULL) {
             logNotice("malloc arena new chunk full");

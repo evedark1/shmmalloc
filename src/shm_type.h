@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <pthread.h>
 #include "shm_util.h"
+#include "shm_tree.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,11 +42,6 @@ static inline uint32_t pos2offset(uint64_t pos)
     return (uint32_t)pos;
 }
 
-struct shm_list {
-    uint64_t next;
-    uint64_t prev;
-};
-
 #define CHUNK_SMALL_LIMIT 2048			// 2 KB
 #define CHUNK_MEDIUM_LIMIT (1024 * 1024) // 1 MB
 #define RUN_CONFIG_SIZE 15
@@ -57,6 +53,8 @@ struct run_config {
 };
 
 struct chunk_run {
+    struct shm_tree_node node;	// must be first
+
     uint64_t pos;
     uint32_t conf_index;
     uint32_t elemsize;
@@ -96,6 +94,11 @@ struct shm_arena {
 
 #define SHM_ARENA_MAX 256
 
+struct shm_run_pool {
+    uint64_t full;
+    uint64_t working;
+};
+
 struct shm_shared_context {
     uint32_t init_flag;
     key_t key;
@@ -104,6 +107,7 @@ struct shm_shared_context {
 
     pthread_mutex_t mutex;	// locker for all shared memory allocator
     struct shm_arena arenas[SHM_ARENA_MAX]; // 0 used by self
+    struct shm_run_pool run_pool[RUN_CONFIG_SIZE];
 };
 
 struct shm_arena_addr {

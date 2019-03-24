@@ -1,12 +1,10 @@
 #include "shm_chunk.h"
-#include <assert.h>
 #include <string.h>
 #include "shm_logger.h"
 #include "shm_util.h"
 #include "shm_malloc_inc.h"
 
 static_assert(sizeof(struct chunk_header) <= SHM_RUN_UNIT_SIZE * SHM_CHUNK_HEADER_HOLD, "chunk header too big");
-#define RUN_LIST_NULL 0xffffffff
 
 #define RUN_CONFIG_ITEM(index, elem) {index, elem, SHM_RUN_UNIT_SIZE / elem}
 const struct run_config run_config_list[RUN_CONFIG_SIZE] =
@@ -78,24 +76,6 @@ static inline struct chunk_run *find_run(struct chunk_header *chunk, uint32_t of
     return chunk->small.runs + runidx;
 }
 
-static inline uint32_t malloc_run(struct chunk_run *run, void *addr)
-{
-    uint32_t offset = run->free;
-    assert(offset != RUN_LIST_NULL);
-    char *next = (char*)addr + offset;
-    run->free = *(uint32_t*)next;
-    run->used++;
-    return offset;
-}
-
-static inline void free_run(struct chunk_run *run, uint32_t offset, void *addr)
-{
-    char *next = (char*)addr + offset;
-    *(uint32_t*)next = run->free;
-    run->free = offset;
-    run->used--;
-}
-
 static void free_chunk_small(struct chunk_header *chunk, uint32_t offset)
 {
     uint32_t chunk_offset = offset - pos2offset(chunk->pos);
@@ -130,7 +110,7 @@ uint64_t malloc_chunk_small(struct chunk_header *chunk, uint32_t type)
     assert(idx < SHM_CHUNK_RUN_SIZE);
 
     // init chunk_run
-    uint32_t offset = (idx + SHM_CHUNK_HEADER_HOLD) * SHM_RUN_UNIT_SIZE;
+    uint32_t offset = run_idx2offset(idx);
     const struct run_config *conf = run_config_list + type;
     struct chunk_run *run = chunk->small.runs + idx;
     run->pos = chunk->pos + offset;

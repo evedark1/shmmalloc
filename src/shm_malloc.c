@@ -130,12 +130,3 @@ void *get_or_update_arena_addr(uint32_t index)
     }
     return arena->addr;
 }
-
-void *get_or_update_addr(uint64_t pos)
-{
-    uint32_t index = pos2index(pos);
-    void *base = get_or_update_arena_addr(index);
-    if(base == NULL)
-        return NULL;
-    return (char*)base + pos2offset(pos);
-}
