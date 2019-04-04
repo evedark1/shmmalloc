@@ -26,7 +26,7 @@ int shm_init(const char *path, int create)
         return -1;
 
     struct shm_shared_context *context = local_context.shared_context;
-    lock_context(context);
+    lock_context();
     local_context.arena_addrs[0].addr = local_context.shared_context;
     local_context.arena_addrs[0].shmid = context->arenas[0].shmid;
     for(uint32_t i = 1; i < SHM_ARENA_MAX; i++) {
@@ -35,7 +35,7 @@ int shm_init(const char *path, int create)
             local_context.arena_addrs[i].shmid = context->arenas[i].shmid;
         }
     }
-    unlock_context(context);
+    unlock_context();
 
     return 0;
 }
@@ -45,9 +45,9 @@ uint64_t shm_malloc(size_t size)
     if(size == 0)
         return SHM_NULL;
 
-    lock_context(local_context.shared_context);
-    uint64_t pos = malloc_arena(local_context.shared_context, size);
-    unlock_context(local_context.shared_context);
+    lock_context();
+    uint64_t pos = malloc_arena(size);
+    unlock_context();
     return pos;
 }
 
@@ -58,9 +58,9 @@ void shm_free(uint64_t pos)
     uint32_t index = pos2index(pos);
     uint32_t offset = pos2offset(pos);
 
-    lock_context(local_context.shared_context);
-    free_arena(local_context.shared_context, index, offset);
-    unlock_context(local_context.shared_context);
+    lock_context();
+    free_arena(index, offset);
+    unlock_context();
 }
 
 uint64_t shm_realloc(uint64_t pos, size_t size)
@@ -69,21 +69,20 @@ uint64_t shm_realloc(uint64_t pos, size_t size)
         return shm_malloc(size);
     uint32_t index = pos2index(pos);
     uint32_t offset = pos2offset(pos);
-    struct shm_shared_context *context = local_context.shared_context;
 
     uint64_t ret = pos;
-    lock_context(local_context.shared_context);
-    size_t checksize = check_arena(context, index, offset);
+    lock_context();
+    size_t checksize = check_arena(index, offset);
     if(size > checksize && checksize != 0) {
-        ret = malloc_arena(context, size);
+        ret = malloc_arena(size);
         if(ret != SHM_NULL) {
             void *src = get_or_update_addr(pos);
             void *dest = get_or_update_addr(ret);
             memcpy(dest, src, checksize);
-            free_arena(context, index, offset);
+            free_arena(index, offset);
         }
     }
-    unlock_context(local_context.shared_context);
+    unlock_context();
     return ret;
 }
 
@@ -103,9 +102,9 @@ void *shm_get_addr(uint64_t pos)
     if(index >= SHM_ARENA_MAX)
         return NULL;
 
-    lock_context(local_context.shared_context);
+    lock_context();
     void *base = get_or_update_arena_addr(index);
-    unlock_context(local_context.shared_context);
+    unlock_context();
 
     if(base == NULL)
         return NULL;

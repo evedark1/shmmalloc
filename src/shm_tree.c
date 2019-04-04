@@ -4,8 +4,6 @@
 
 struct shm_tree_node *shm_tree_getaddr(uint64_t addr)
 {
-    if(addr == SHM_NULL)
-        return NULL;
     return get_or_update_addr(addr);
 }
 

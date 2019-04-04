@@ -4,8 +4,7 @@
 #include "shm_malloc.h"
 
 uint64_t large_malloc_test() {
-    //uint64_t pos = shm_malloc(2 * 1024 * 1024);	// large malloc
-    uint64_t pos = shm_malloc(8);	// small malloc
+    uint64_t pos = shm_malloc(2 * 1024 * 1024);	// large malloc
     if(pos == SHM_NULL) {
         printf("shm malloc error\n");
         return 0;
@@ -17,6 +16,24 @@ uint64_t large_malloc_test() {
         return 0;
     }
     strcpy(addr, "hello shm malloc, this is large malloc test\n");
+    shm_set_userdata(pos);
+    return pos;
+}
+
+uint64_t small_malloc_test() {
+    uint64_t pos = shm_malloc(8);	// large malloc
+    if(pos == SHM_NULL) {
+        printf("shm malloc error\n");
+        return 0;
+    }
+
+    void *addr = shm_get_addr(pos);
+    if(addr == NULL) {
+        printf("shm writer get addr error\n");
+        return 0;
+    }
+    printf("shm malloc %lx %p\n", pos, addr);
+    *(uint32_t*)addr = 0x1a1b1c1d;
     shm_set_userdata(pos);
     return pos;
 }
@@ -43,7 +60,7 @@ int main() {
             printf("shm reader get addr error\n");
             return 0;
         }
-        printf("shm read: %s\n", (char*)addr);
+        printf("shm read: %p %u\n", addr, *(uint32_t*)addr);
         // wait end
         getchar();
     }

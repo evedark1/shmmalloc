@@ -19,8 +19,7 @@ extern "C" {
 #define SHM_RUN_REG_SIZE 	(SHM_RUN_UNIT_SIZE / 8)
 
 #define SHM_CHUNK_UNIT_SIZE	(1024 * 1024)	// 1 MB
-#define SHM_CHUNK_HEADER_HOLD 5
-#define SHM_CHUNK_RUN_SIZE  (SHM_CHUNK_UNIT_SIZE / SHM_RUN_UNIT_SIZE - SHM_CHUNK_HEADER_HOLD)
+#define SHM_CHUNK_RUN_SIZE  (SHM_CHUNK_UNIT_SIZE / SHM_RUN_UNIT_SIZE)
 
 #define SHM_ARENA_UNIT_SIZE (8 * 1024 * 1024)	// 8 MB
 #define SHM_ARENA_CHUNK_SIZE (SHM_ARENA_UNIT_SIZE/ SHM_CHUNK_UNIT_SIZE)
@@ -49,10 +48,9 @@ static inline uint32_t pos2offset(uint64_t pos)
 struct run_config {
     uint32_t index;
     uint32_t elemsize;
-    uint32_t regsize;
 };
 
-struct chunk_run {
+struct run_header {
     struct shm_tree_node node;	// must be first
 
     uint64_t pos;
@@ -65,7 +63,6 @@ struct chunk_run {
 };
 
 struct chunk_small {
-    struct chunk_run runs[SHM_CHUNK_RUN_SIZE];
     bitmap_t bitmap[BITMAP_BITS2GROUPS(SHM_CHUNK_RUN_SIZE)];
 };
 
@@ -74,6 +71,7 @@ struct chunk_small {
 #define CHUNK_TYPE_MEDIUM 2
 
 struct chunk_header {
+    struct shm_tree_node node;
     uint32_t type;
     uint64_t pos;
     struct chunk_small small;
@@ -94,11 +92,6 @@ struct shm_arena {
 
 #define SHM_ARENA_MAX 256
 
-struct shm_run_pool {
-    uint64_t full;
-    uint64_t working;
-};
-
 struct shm_shared_context {
     uint32_t init_flag;
     key_t key;
@@ -107,7 +100,8 @@ struct shm_shared_context {
 
     pthread_mutex_t mutex;	// locker for all shared memory allocator
     struct shm_arena arenas[SHM_ARENA_MAX]; // 0 used by self
-    struct shm_run_pool run_pool[RUN_CONFIG_SIZE];
+    struct shm_pool run_pool[RUN_CONFIG_SIZE];
+    struct shm_pool chunk_small_pool;
 };
 
 struct shm_arena_addr {

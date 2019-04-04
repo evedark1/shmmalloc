@@ -4,29 +4,31 @@
 #include "shm_util.h"
 #include "shm_malloc_inc.h"
 
-static_assert(sizeof(struct chunk_header) <= SHM_RUN_UNIT_SIZE * SHM_CHUNK_HEADER_HOLD, "chunk header too big");
+#define RUN_HEADER_SIZE 64
+static_assert(sizeof(struct chunk_header) <= SHM_RUN_UNIT_SIZE, "chunk header too big");
+static_assert(sizeof(struct run_header) <= SHM_RUN_UNIT_SIZE, "run header too big");
 
-#define RUN_CONFIG_ITEM(index, elem) {index, elem, SHM_RUN_UNIT_SIZE / elem}
+#define RUN_CONFIG_ITEM(index, elem) {index, elem}
 const struct run_config run_config_list[RUN_CONFIG_SIZE] =
 {
-    {0, 0, 0},
+    {0, 0},
     // align 8
-    RUN_CONFIG_ITEM(1, 8),
-    RUN_CONFIG_ITEM(2, 16),
-    RUN_CONFIG_ITEM(3, 32),
-    RUN_CONFIG_ITEM(4, 48),
-    RUN_CONFIG_ITEM(5, 64),
-    RUN_CONFIG_ITEM(6, 96),
+    {1, 8},
+    {2, 16},
+    {3, 32},
+    {4, 48},
+    {5, 64},
+    {6, 96},
     // align 32
-    RUN_CONFIG_ITEM(7, 128),
-    RUN_CONFIG_ITEM(8, 192),
-    RUN_CONFIG_ITEM(9, 256),
-    RUN_CONFIG_ITEM(10, 384),
-    RUN_CONFIG_ITEM(11, 512),
+    {7, 128},
+    {8, 192},
+    {9, 256},
+    {10, 384},
+    {11, 512},
     // align 128
-    RUN_CONFIG_ITEM(12, 768),
-    RUN_CONFIG_ITEM(13, 1024),
-    RUN_CONFIG_ITEM(14, 2048),
+    {12, 768},
+    {13, 1280},
+    {14, CHUNK_SMALL_LIMIT},
 };
 
 // align 8
@@ -45,7 +47,7 @@ const static uint32_t run_table32[16] =
 const static uint32_t run_table128[16] =
 {
     12, 12, 12, 12, 12, 12, 13, 13,
-    14, 14, 14, 14, 14, 14, 14, 14,
+    13, 13, 14, 14, 14, 14, 14, 14,
 };
 
 uint32_t find_run_config(size_t size)
@@ -65,71 +67,63 @@ uint32_t find_run_config(size_t size)
     return ret;
 }
 
-static inline struct chunk_run *find_run(struct chunk_header *chunk, uint32_t offset)
-{
-    assert(chunk->type == CHUNK_TYPE_SMALL);
-    uint32_t chunk_offset = offset - pos2offset(chunk->pos);
-    uint32_t runidx = chunk_offset / SHM_RUN_UNIT_SIZE - SHM_CHUNK_HEADER_HOLD;
-    if(runidx >= SHM_CHUNK_RUN_SIZE || !bitmap_get(chunk->small.bitmap, runidx)) {
-        return NULL;
-    }
-    return chunk->small.runs + runidx;
-}
-
-static void free_chunk_small(struct chunk_header *chunk, uint32_t offset)
-{
-    uint32_t chunk_offset = offset - pos2offset(chunk->pos);
-    uint32_t runidx = chunk_offset / SHM_RUN_UNIT_SIZE - SHM_CHUNK_HEADER_HOLD;
-    if(runidx >= SHM_CHUNK_RUN_SIZE || !bitmap_get(chunk->small.bitmap, runidx)) {
-        logNotice("free chunk small offset out of range");
-        return;
-    }
-
-    struct chunk_run *run = chunk->small.runs + runidx;
-    uint32_t run_offset = offset % SHM_RUN_UNIT_SIZE;
-    if(run_offset % run->elemsize != 0) {
-        logNotice("free chunk small offset not valid");
-        return;
-    }
-    void *addr = (char*)chunk + (offset - run_offset);
-    free_run(run, run_offset, addr);
-}
-
 void init_chunk(uint64_t pos, uint32_t type)
 {
     struct chunk_header *chunk = get_or_update_addr(pos);
     memset(chunk, 0, sizeof(struct chunk_header));
     chunk->pos = pos;
     chunk->type = type;
+    if(type == CHUNK_TYPE_SMALL) {
+        // first unit used by chunk_header
+        bitmap_set(chunk->small.bitmap, 0);
+    }
 }
 
-uint64_t malloc_chunk_small(struct chunk_header *chunk, uint32_t type)
+struct run_header *malloc_chunk_run(struct chunk_header *chunk, uint32_t type)
 {
     assert(chunk->type == CHUNK_TYPE_SMALL);
     int32_t idx = bitmap_sfu(chunk->small.bitmap, SHM_CHUNK_RUN_SIZE);
     assert(idx < SHM_CHUNK_RUN_SIZE);
 
     // init chunk_run
-    uint32_t offset = run_idx2offset(idx);
     const struct run_config *conf = run_config_list + type;
-    struct chunk_run *run = chunk->small.runs + idx;
+    uint32_t offset = run_idx2offset(idx);
+    struct run_header *run = (struct run_header*)((char*)chunk + offset);
+    memset(run, 0, SHM_RUN_UNIT_SIZE);
+
     run->pos = chunk->pos + offset;
     run->conf_index = type;
     run->elemsize = conf->elemsize;
-    run->total = SHM_RUN_UNIT_SIZE / run->elemsize;
+    run->total = (SHM_RUN_UNIT_SIZE - RUN_HEADER_SIZE) / run->elemsize;
     run->used = 0;
-    run->free = 0;
-    // init run block
-    char *runblock = (char*)get_or_update_addr(chunk->pos) + offset;
-    for(uint32_t i = 0; i < run->total - 1; i++) {
-        uint32_t diff = i * run->elemsize;
-        char *addr = runblock + diff;
-        *(uint32_t*)addr = diff + run->elemsize;
-    }
-    char *endptr = runblock + run->elemsize * (run->total - 1);
-    *(uint32_t*)endptr = RUN_LIST_NULL;
+    run->free = RUN_HEADER_SIZE;
 
-    return run->pos + malloc_run(run, runblock);
+    // init run free list
+    char *runblock = (char*)run + RUN_HEADER_SIZE;
+    for(uint32_t i = 1; i < run->total; i++) {
+        uint32_t diff = i * run->elemsize + RUN_HEADER_SIZE;
+        *(uint32_t*)runblock = diff;
+        runblock = runblock + run->elemsize;
+    }
+    *(uint32_t*)runblock = RUN_LIST_NULL;
+
+    // add to run pool
+    struct shm_shared_context *context = local_context.shared_context;
+    shm_tree_push(context->run_pool + type, (char*)run - (char*)chunk);
+    return run;
+}
+
+static void free_chunk_small(struct chunk_header *chunk, uint32_t offset)
+{
+    uint32_t chunk_offset = offset - pos2offset(chunk->pos);
+    struct run_header *run = find_run(chunk, chunk_offset);
+    if(run == NULL) {
+        logNotice("free chunk small offset out of range");
+        return;
+    }
+
+    uint32_t run_offset = chunk_offset - pos2offset(run->pos);
+    free_run(run, run_offset);
 }
 
 void free_chunk(struct chunk_header *chunk, uint32_t offset)
@@ -149,7 +143,7 @@ void free_chunk(struct chunk_header *chunk, uint32_t offset)
 
 static size_t check_chunk_small(struct chunk_header *chunk, uint32_t offset)
 {
-    struct chunk_run *run = find_run(chunk, offset);
+    struct run_header *run = find_run(chunk, offset - pos2offset(chunk->pos));
     return run->elemsize;
 }
 

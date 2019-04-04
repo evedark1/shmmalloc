@@ -2,6 +2,7 @@
 #define _SHM_MALLOC_INC_H
 
 #include <assert.h>
+#include "shm_malloc.h"
 #include "shm_type.h"
 
 #ifdef __cplusplus
@@ -38,6 +39,8 @@ return addr, NULL for fail
 */
 static inline void *get_or_update_addr(uint64_t pos)
 {
+    if(pos == SHM_NULL)
+        return NULL;
     uint32_t index = pos2index(pos);
     void *base = get_or_update_arena_addr(index);
     if(base == NULL)

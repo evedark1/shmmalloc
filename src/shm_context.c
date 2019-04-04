@@ -182,46 +182,66 @@ static uint64_t new_chunk(struct shm_shared_context *context, uint32_t type)
     // init new chunk
     if(ret != SHM_NULL) {
         init_chunk(ret, type);
+        if(type == CHUNK_TYPE_SMALL) {
+            shm_tree_push(&context->chunk_small_pool, ret);
+        }
+        //TODO: medium type
     }
     return ret;
 }
 
-uint64_t try_run_pool(struct shm_shared_context *context, uint32_t runidx)
+static uint64_t get_or_new_chunk(struct shm_shared_context *context, uint32_t type)
 {
-    uint64_t run_pos = context->run_pool[runidx].working;
-    if(run_pos == SHM_NULL)
-        return SHM_NULL;
-
-    uint32_t run_offset = run_pos & (uint64_t)(SHM_CHUNK_UNIT_SIZE - 1);
-    uint64_t chunk_pos = run_pos - run_offset;
-    uint32_t run_idx = run_offset2idx(run_offset);
-    struct chunk_header *chunk = get_or_update_addr(chunk_pos);
-    struct chunk_run *run = chunk->small.runs + run_idx;
-    assert(run_pos == run->pos);
-
-    uint32_t offset = malloc_run(run, (char*)chunk + run_offset);
-    if(run_full(run)) {
-        context->run_pool[runidx].working = shm_tree_pop(run_pos);
+    uint64_t chunk_pos = SHM_NULL;
+    switch(type) {
+    case CHUNK_TYPE_SMALL:
+        chunk_pos = context->chunk_small_pool.root;
+        break;
+    case CHUNK_TYPE_MEDIUM:
+        //TODO: medium type
+        break;
     }
-    return run_pos + offset;
+    if(chunk_pos == SHM_NULL)
+        chunk_pos = new_chunk(context, type);
+    return chunk_pos;
 }
 
-uint64_t malloc_arena(struct shm_shared_context *context, size_t size)
+static struct run_header *try_run_pool(struct shm_shared_context *context, uint32_t runidx)
 {
+    struct shm_pool *pool = context->run_pool + runidx;
+    uint64_t run_pos = pool->root;
+    if(run_pos == SHM_NULL)
+        return NULL;
+
+    uint32_t run_offset = run_pos % SHM_CHUNK_UNIT_SIZE;
+    uint64_t chunk_pos = run_pos - run_offset;
+    struct chunk_header *chunk = get_or_update_addr(chunk_pos);
+    struct run_header *run = find_run(chunk, run_offset);
+    assert(run != NULL);
+    return run;
+}
+
+uint64_t malloc_arena(size_t size)
+{
+    struct shm_shared_context *context = local_context.shared_context;
     uint64_t ret = SHM_NULL;
     if(size <= CHUNK_SMALL_LIMIT) {
         uint32_t runidx = find_run_config(size);
-        if((ret = try_run_pool(context, runidx)) != SHM_NULL)
-            return ret;
+        struct run_header *run = try_run_pool(context, runidx);
 
-        //TODO: find chunk
-        uint64_t chunk_pos = new_chunk(context, CHUNK_TYPE_SMALL);
-        if(chunk_pos == SHM_NULL) {
-            logNotice("malloc arena new chunk full");
-            return SHM_NULL;
+        if(run == NULL) {
+            uint64_t chunk_pos = get_or_new_chunk(context, CHUNK_TYPE_SMALL);
+            if(chunk_pos == SHM_NULL) {
+                logNotice("malloc arena new chunk full");
+                return SHM_NULL;
+            }
+            run = malloc_chunk_run(get_or_update_addr(chunk_pos), runidx);
         }
-        ret = malloc_chunk_small(get_or_update_addr(chunk_pos), runidx);
-        assert(ret != SHM_NULL);
+        assert(run != NULL);
+        ret = run->pos + malloc_run(run);
+        if(run_full(run)) {
+            shm_tree_pop(context->run_pool + runidx);
+        }
     } else if(size <= CHUNK_MEDIUM_LIMIT) {
         //TODO: medium alloc
     } else {
@@ -234,8 +254,9 @@ uint64_t malloc_arena(struct shm_shared_context *context, size_t size)
     return ret;
 }
 
-void free_arena(struct shm_shared_context *context, uint32_t index, uint32_t offset)
+void free_arena(uint32_t index, uint32_t offset)
 {
+    struct shm_shared_context *context = local_context.shared_context;
     if(!is_arena_valid(context, index)) {
         logNotice("free arena index error, %u %u", index, offset);
         return;
@@ -265,8 +286,9 @@ void free_arena(struct shm_shared_context *context, uint32_t index, uint32_t off
     }
 }
 
-size_t check_arena(struct shm_shared_context *context, uint32_t index, uint32_t offset)
+size_t check_arena(uint32_t index, uint32_t offset)
 {
+    struct shm_shared_context *context = local_context.shared_context;
     if(!is_arena_valid(context, index)) {
         logNotice("check arena index error, %u %u", index, offset);
         return 0;
@@ -298,17 +320,17 @@ size_t check_arena(struct shm_shared_context *context, uint32_t index, uint32_t 
     return ret;
 }
 
-void lock_context(struct shm_shared_context *context)
+void lock_context()
 {
-    int err = pthread_mutex_lock(&context->mutex);
+    int err = pthread_mutex_lock(&local_context.shared_context->mutex);
     if(err != 0) {
         logError("lock shared context error %d", err);
     }
 }
 
-void unlock_context(struct shm_shared_context *context)
+void unlock_context()
 {
-    int err = pthread_mutex_unlock(&context->mutex);
+    int err = pthread_mutex_unlock(&local_context.shared_context->mutex);
     if(err != 0) {
         logError("unlock shared context error %d", err);
     }

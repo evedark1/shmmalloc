@@ -22,7 +22,7 @@ TEST(TestChunk, FindRunConfig) {
     EXPECT_EQ(find_conf(512)->elemsize, 512);
 
     EXPECT_EQ(find_conf(520)->elemsize, 768);
-    EXPECT_EQ(find_conf(1000)->elemsize, 1024);
-    EXPECT_EQ(find_conf(1025)->elemsize, 2048);
+    EXPECT_EQ(find_conf(1000)->elemsize, 1280);
+    EXPECT_EQ(find_conf(1025)->elemsize, 1280);
     EXPECT_EQ(find_conf(2048)->elemsize, 2048);
 }
