@@ -38,8 +38,8 @@ TEST(TestBitmap, BitmapFfu) {
 
 TEST(TestUtil, AlignSize) {
     EXPECT_EQ(align_size(0, 8), 0);
-    EXPECT_EQ(align_size(1, 8), 1);
-    EXPECT_EQ(align_size(8, 8), 1);
-    EXPECT_EQ(align_size(60, 8), 8);
-    EXPECT_EQ(align_size(64, 8), 8);
+    EXPECT_EQ(align_size(1, 8), 8);
+    EXPECT_EQ(align_size(8, 8), 8);
+    EXPECT_EQ(align_size(60, 8), 64);
+    EXPECT_EQ(align_size(64, 8), 64);
 }

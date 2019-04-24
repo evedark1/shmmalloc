@@ -1,43 +1,45 @@
 #include "shm_tree.h"
-#include "shm_malloc.h"
 #include "shm_malloc_inc.h"
 
-struct shm_tree_node *shm_tree_getaddr(uint64_t addr)
+struct shm_tree_addr shm_tree_getaddr(uint64_t addr)
 {
-    return get_or_update_addr(addr);
+    struct shm_tree_addr r;
+    r.pos = addr;
+    r.addr = get_or_update_addr(addr);
+    return r;
 }
 
-uint64_t shm_tree_merge(
-        uint64_t tr1, struct shm_tree_node *pr1,
-        uint64_t tr2, struct shm_tree_node *pr2)
+// leftist tree merge
+struct shm_tree_addr shm_tree_merge(struct shm_tree_addr tr1, struct shm_tree_addr tr2)
 {
-    if(tr1 == SHM_NULL)
+    if(tr1.pos == SHM_NULL)
         return tr2;
-    if(tr2 == SHM_NULL)
+    if(tr2.pos == SHM_NULL)
         return tr1;
 
-    if(tr1 > tr2) {
-        uint64_t t = tr1;
+    if(tr1.pos > tr2.pos) {
+        struct shm_tree_addr t = tr1;
         tr1 = tr2;
         tr2 = t;
     }
 
-    struct shm_tree_node *rnode = shm_tree_getaddr(pr1->right);
-    pr1->right = shm_tree_merge(pr1->right, rnode, tr2, pr2);
+    struct shm_tree_addr rnode = shm_tree_merge(shm_tree_getaddr(tr1.addr->right), tr2);
+    rnode.addr->root = tr1.pos;
+    tr1.addr->right = rnode.pos;
 
-    if(pr1->left == SHM_NULL) {
-        pr1->left = pr1->right;
-        pr1->right = SHM_NULL;
+    if(tr1.addr->left == SHM_NULL) {
+        tr1.addr->left = tr1.addr->right;
+        tr1.addr->right = SHM_NULL;
     } else {
-        struct shm_tree_node *lnode = shm_tree_getaddr(pr1->right);
-        if(lnode->rank < rnode->rank) {
-            uint64_t t = pr1->left;
-            pr1->left = pr1->right;
-            pr1->right = t;
+        struct shm_tree_addr lnode = shm_tree_getaddr(tr1.addr->left);
+        if(lnode.addr->rank < rnode.addr->rank) {
+            uint64_t t = tr1.addr->left;
+            tr1.addr->left = tr1.addr->right;
+            tr1.addr->right = t;
 
-            pr1->rank = lnode->rank + 1;
+            tr1.addr->rank = lnode.addr->rank + 1;
         } else {
-            pr1->rank = rnode->rank + 1;
+            tr1.addr->rank = rnode.addr->rank + 1;
         }
     }
     return tr1;

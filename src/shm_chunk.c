@@ -109,28 +109,53 @@ struct run_header *malloc_chunk_run(struct chunk_header *chunk, uint32_t type)
 
     // add to run pool
     struct shm_shared_context *context = local_context.shared_context;
-    shm_tree_push(context->run_pool + type, (char*)run - (char*)chunk);
+    shm_tree_push(context->run_pool + type, run->pos);
     return run;
 }
 
-static void free_chunk_small(struct chunk_header *chunk, uint32_t offset)
+void free_chunk_run(struct chunk_header *chunk, uint64_t pos)
 {
+    uint32_t idx = (pos - chunk->pos) / SHM_RUN_UNIT_SIZE;
+    assert(bitmap_get(chunk->small.bitmap, idx));
+    bitmap_clear(chunk->small.bitmap, idx);
+}
+
+static bool free_chunk_small(struct chunk_header *chunk, uint32_t offset)
+{
+    bool check = false;
     uint32_t chunk_offset = offset - pos2offset(chunk->pos);
     struct run_header *run = find_run(chunk, chunk_offset);
     if(run == NULL) {
         logNotice("free chunk small offset out of range");
-        return;
+        return check;
     }
 
+    bool full = run_full(run);
     uint32_t run_offset = chunk_offset - pos2offset(run->pos);
     free_run(run, run_offset);
+
+    if(full) {
+        struct shm_shared_context *context = local_context.shared_context;
+        shm_tree_push(context->run_pool + run->conf_index , run->pos);
+    }
+    if(run_empty(run)) {
+        struct shm_shared_context *context = local_context.shared_context;
+        struct shm_pool *pool = context->run_pool + run->conf_index;
+        if(pool->size > 1) {
+            shm_tree_remove(pool, run->pos);
+            free_chunk_run(chunk, run->pos);
+            check = true;
+        }
+    }
+    return check;
 }
 
-void free_chunk(struct chunk_header *chunk, uint32_t offset)
+bool free_chunk(struct chunk_header *chunk, uint32_t offset)
 {
+    bool check = false;
     switch(chunk->type) {
     case CHUNK_TYPE_SMALL:
-        free_chunk_small(chunk, offset);
+        check = free_chunk_small(chunk, offset);
         break;
     case CHUNK_TYPE_MEDIUM:
         //TODO: chunk medium
@@ -139,6 +164,7 @@ void free_chunk(struct chunk_header *chunk, uint32_t offset)
         logWarning("free chunk type invalid %d", chunk->type);
         break;
     }
+    return check;
 }
 
 static size_t check_chunk_small(struct chunk_header *chunk, uint32_t offset)

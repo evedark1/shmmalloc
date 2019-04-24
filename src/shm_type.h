@@ -102,6 +102,7 @@ struct shm_shared_context {
     struct shm_arena arenas[SHM_ARENA_MAX]; // 0 used by self
     struct shm_pool run_pool[RUN_CONFIG_SIZE];
     struct shm_pool chunk_small_pool;
+    struct shm_pool chunk_medium_pool;
 };
 
 struct shm_arena_addr {

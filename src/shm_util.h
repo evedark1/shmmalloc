@@ -73,7 +73,7 @@ static inline int32_t bitmap_sfu(bitmap_t *bitmap, uint32_t b) {
 }
 
 static inline size_t align_size(size_t size, size_t align) {
-    return (size + (align - 1)) / align;
+    return align * ((size + (align - 1)) / align);
 }
 
 // malloc and copy str

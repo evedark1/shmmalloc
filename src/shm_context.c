@@ -88,7 +88,7 @@ void munmap_arena(void *addr)
 
 static struct shm_arena *new_arena(struct shm_shared_context *context, uint32_t type, size_t size)
 {
-    assert(size / SHM_CHUNK_UNIT_SIZE == 0);
+    assert(size % SHM_CHUNK_UNIT_SIZE == 0);
     uint32_t index;
     for(index = 1; index < SHM_ARENA_MAX; index++) {
         if(context->arenas[index].type == ARENA_TYPE_EMPTY)
@@ -184,10 +184,25 @@ static uint64_t new_chunk(struct shm_shared_context *context, uint32_t type)
         init_chunk(ret, type);
         if(type == CHUNK_TYPE_SMALL) {
             shm_tree_push(&context->chunk_small_pool, ret);
+        } else {
+            shm_tree_push(&context->chunk_medium_pool, ret);
         }
-        //TODO: medium type
     }
     return ret;
+}
+
+static void delete_chunk(struct shm_shared_context *context, struct chunk_header *chunk)
+{
+    if(chunk->type == CHUNK_TYPE_SMALL) {
+        shm_tree_remove(&context->chunk_small_pool, chunk->pos);
+    } else {
+        shm_tree_remove(&context->chunk_medium_pool, chunk->pos);
+    }
+    struct shm_arena *arena = context->arenas + pos2index(chunk->pos);
+    uint32_t idx = pos2offset(chunk->pos) / SHM_CHUNK_UNIT_SIZE;
+    assert(arena->chunks[idx] != 0);
+    arena->chunks[idx] = 0;
+    //TODO: delete arena
 }
 
 static uint64_t get_or_new_chunk(struct shm_shared_context *context, uint32_t type)
@@ -206,6 +221,20 @@ static uint64_t get_or_new_chunk(struct shm_shared_context *context, uint32_t ty
     return chunk_pos;
 }
 
+static void check_delete_chunk(struct shm_shared_context *context, struct chunk_header *chunk)
+{
+    switch(chunk->type) {
+    case CHUNK_TYPE_SMALL:
+        if(bitmap_ffu(chunk->small.bitmap, SHM_CHUNK_RUN_SIZE) >= SHM_CHUNK_RUN_SIZE) {
+            delete_chunk(context, chunk);
+        }
+        break;
+    case CHUNK_TYPE_MEDIUM:
+        //TODO: medium type
+        break;
+    }
+}
+
 static struct run_header *try_run_pool(struct shm_shared_context *context, uint32_t runidx)
 {
     struct shm_pool *pool = context->run_pool + runidx;
@@ -213,10 +242,7 @@ static struct run_header *try_run_pool(struct shm_shared_context *context, uint3
     if(run_pos == SHM_NULL)
         return NULL;
 
-    uint32_t run_offset = run_pos % SHM_CHUNK_UNIT_SIZE;
-    uint64_t chunk_pos = run_pos - run_offset;
-    struct chunk_header *chunk = get_or_update_addr(chunk_pos);
-    struct run_header *run = find_run(chunk, run_offset);
+    struct run_header *run = get_or_update_addr(run_pos);
     assert(run != NULL);
     return run;
 }
@@ -272,7 +298,10 @@ void free_arena(uint32_t index, uint32_t offset)
         chunk_pos = get_arena_chunk(arena, offset);
         if(chunk_pos != SHM_NULL) {
             chunk_header = get_or_update_addr(chunk_pos);
-            free_chunk(chunk_header, offset);
+            bool check = free_chunk(chunk_header, offset);
+            if(check) {
+                check_delete_chunk(context, chunk_header);
+            }
         } else {
             logNotice("free arena offset error, %u %u", index, offset);
         }

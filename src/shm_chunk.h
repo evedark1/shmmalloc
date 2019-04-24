@@ -31,7 +31,7 @@ static inline struct run_header *find_run(struct chunk_header *chunk, uint32_t o
     if(runidx >= SHM_CHUNK_RUN_SIZE || !bitmap_get(chunk->small.bitmap, runidx)) {
         return NULL;
     }
-    return (struct run_header*)((char*)chunk + offset);
+    return (struct run_header*)((char*)chunk + runidx * SHM_CHUNK_RUN_SIZE);
 }
 
 static inline uint32_t malloc_run(struct run_header *run)
@@ -67,7 +67,7 @@ static inline bool run_empty(struct run_header *run)
 
 extern void init_chunk(uint64_t pos, uint32_t type);
 extern struct run_header *malloc_chunk_run(struct chunk_header *chunk, uint32_t type);
-extern void free_chunk(struct chunk_header *chunk, uint32_t offset);
+extern bool free_chunk(struct chunk_header *chunk, uint32_t offset);
 extern size_t check_chunk(struct chunk_header *chunk, uint32_t offset);
 
 #ifdef __cplusplus
