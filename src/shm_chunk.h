@@ -14,24 +14,14 @@ extern "C" {
 extern const struct run_config run_config_list[RUN_CONFIG_SIZE];
 extern uint32_t find_run_config(size_t size);
 
-static inline uint32_t run_idx2offset(uint32_t idx)
-{
-    return idx * SHM_RUN_UNIT_SIZE;
-}
-
-static inline uint32_t run_offset2idx(uint32_t offset)
-{
-    return offset / SHM_RUN_UNIT_SIZE;
-}
-
 static inline struct run_header *find_run(struct chunk_header *chunk, uint32_t offset)
 {
     assert(chunk->type == CHUNK_TYPE_SMALL);
-    uint32_t runidx = run_offset2idx(offset);
+    uint32_t runidx = offset / SHM_RUN_UNIT_SIZE;
     if(runidx >= SHM_CHUNK_RUN_SIZE || !bitmap_get(chunk->small.bitmap, runidx)) {
         return NULL;
     }
-    return (struct run_header*)((char*)chunk + runidx * SHM_CHUNK_RUN_SIZE);
+    return (struct run_header*)((char*)chunk + runidx * SHM_RUN_UNIT_SIZE);
 }
 
 static inline uint32_t malloc_run(struct run_header *run)

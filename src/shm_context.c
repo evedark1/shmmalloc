@@ -290,15 +290,17 @@ void free_arena(uint32_t index, uint32_t offset)
 
     struct shm_arena *arena = context->arenas + index;
     uint64_t chunk_pos = SHM_NULL;
-    struct chunk_header *chunk_header = NULL;
 
     switch(arena->type) {
     case ARENA_TYPE_CONTEXT:
     case ARENA_TYPE_CHUNK:
         chunk_pos = get_arena_chunk(arena, offset);
         if(chunk_pos != SHM_NULL) {
-            chunk_header = get_or_update_addr(chunk_pos);
-            bool check = free_chunk(chunk_header, offset);
+            struct chunk_header *chunk_header = get_or_update_addr(chunk_pos);
+            uint32_t chunk_offset = offset - pos2offset(chunk_pos);
+            assert(chunk_offset < SHM_CHUNK_UNIT_SIZE);
+
+            bool check = free_chunk(chunk_header, chunk_offset);
             if(check) {
                 check_delete_chunk(context, chunk_header);
             }
@@ -326,14 +328,16 @@ size_t check_arena(uint32_t index, uint32_t offset)
 
     struct shm_arena *arena = context->arenas + index;
     uint64_t chunk_pos = SHM_NULL;
-    struct chunk_header *chunk_header = NULL;
 
     switch(arena->type) {
     case ARENA_TYPE_CONTEXT:
     case ARENA_TYPE_CHUNK:
         chunk_pos = get_arena_chunk(arena, offset);
         if(chunk_pos != SHM_NULL) {
-            chunk_header = get_or_update_addr(chunk_pos);
+            struct chunk_header *chunk_header = get_or_update_addr(chunk_pos);
+            uint32_t chunk_offset = offset - pos2offset(chunk_pos);
+            assert(chunk_offset < SHM_CHUNK_UNIT_SIZE);
+
             ret = check_chunk(chunk_header, offset);
         } else {
             logNotice("check arena offset error, %u %u", index, offset);

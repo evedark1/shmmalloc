@@ -87,7 +87,7 @@ struct run_header *malloc_chunk_run(struct chunk_header *chunk, uint32_t type)
 
     // init chunk_run
     const struct run_config *conf = run_config_list + type;
-    uint32_t offset = run_idx2offset(idx);
+    uint32_t offset = idx * SHM_RUN_UNIT_SIZE;
     struct run_header *run = (struct run_header*)((char*)chunk + offset);
     memset(run, 0, SHM_RUN_UNIT_SIZE);
 
@@ -123,15 +123,14 @@ void free_chunk_run(struct chunk_header *chunk, uint64_t pos)
 static bool free_chunk_small(struct chunk_header *chunk, uint32_t offset)
 {
     bool check = false;
-    uint32_t chunk_offset = offset - pos2offset(chunk->pos);
-    struct run_header *run = find_run(chunk, chunk_offset);
+    struct run_header *run = find_run(chunk, offset);
     if(run == NULL) {
         logNotice("free chunk small offset out of range");
         return check;
     }
 
     bool full = run_full(run);
-    uint32_t run_offset = chunk_offset - pos2offset(run->pos);
+    uint32_t run_offset = (uint64_t)(chunk->pos + offset) - run->pos;
     free_run(run, run_offset);
 
     if(full) {
@@ -169,7 +168,7 @@ bool free_chunk(struct chunk_header *chunk, uint32_t offset)
 
 static size_t check_chunk_small(struct chunk_header *chunk, uint32_t offset)
 {
-    struct run_header *run = find_run(chunk, offset - pos2offset(chunk->pos));
+    struct run_header *run = find_run(chunk, offset);
     return run->elemsize;
 }
 
