@@ -38,6 +38,25 @@ void free_test(uint64_t arrpos) {
     shm_free(arrpos);
 }
 
+void read_test(uint64_t arrpos) {
+    uint64_t *addr = shm_get_addr(arrpos);
+    check_exit(addr == NULL, "shm reader get addr error\n");
+    printf("shm read %lx %p\n", arrpos, addr);
+
+    int i;
+    for(i = 0; i < 2048; i++) {
+        uint64_t *p = shm_get_addr(addr[i]);
+        check_exit(p == NULL, "shm read error");
+        if(*p != i) {
+            printf("read %d error\n", i);
+            break;
+        }
+    }
+    if(i == 2048) {
+        printf("read shm success\n");
+    }
+}
+
 int main() {
     int r = 0;
     shm_set_log_level(LOG_INFO);
@@ -56,12 +75,7 @@ int main() {
         free_test(pos);
         shm_set_userdata(0);
     } else {
-        void *addr = shm_get_addr(data);
-        if(addr == NULL) {
-            printf("shm reader get addr error\n");
-            return 0;
-        }
-        printf("shm read: %p %u\n", addr, *(uint32_t*)addr);
+        read_test(data);
         // wait end
         getchar();
     }

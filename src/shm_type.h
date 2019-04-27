@@ -66,6 +66,10 @@ struct chunk_small {
     bitmap_t bitmap[BITMAP_BITS2GROUPS(SHM_CHUNK_RUN_SIZE)];
 };
 
+struct chunk_medium {
+    uint32_t max_empty;
+};
+
 #define CHUNK_TYPE_EMPTY 0
 #define CHUNK_TYPE_SMALL 1
 #define CHUNK_TYPE_MEDIUM 2
@@ -74,7 +78,10 @@ struct chunk_header {
     struct shm_tree_node node;
     uint32_t type;
     uint64_t pos;
-    struct chunk_small small;
+    union {
+        struct chunk_small small;
+        struct chunk_medium medium;
+    } c;
 };
 
 #define ARENA_TYPE_EMPTY 0

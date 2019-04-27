@@ -75,14 +75,14 @@ void init_chunk(uint64_t pos, uint32_t type)
     chunk->type = type;
     if(type == CHUNK_TYPE_SMALL) {
         // first unit used by chunk_header
-        bitmap_set(chunk->small.bitmap, 0);
+        bitmap_set(chunk->c.small.bitmap, 0);
     }
 }
 
 struct run_header *malloc_chunk_run(struct chunk_header *chunk, uint32_t type)
 {
     assert(chunk->type == CHUNK_TYPE_SMALL);
-    int32_t idx = bitmap_sfu(chunk->small.bitmap, SHM_CHUNK_RUN_SIZE);
+    int32_t idx = bitmap_sfu(chunk->c.small.bitmap, SHM_CHUNK_RUN_SIZE);
     assert(idx < SHM_CHUNK_RUN_SIZE);
 
     // init chunk_run
@@ -116,8 +116,8 @@ struct run_header *malloc_chunk_run(struct chunk_header *chunk, uint32_t type)
 void free_chunk_run(struct chunk_header *chunk, uint64_t pos)
 {
     uint32_t idx = (pos - chunk->pos) / SHM_RUN_UNIT_SIZE;
-    assert(bitmap_get(chunk->small.bitmap, idx));
-    bitmap_clear(chunk->small.bitmap, idx);
+    assert(bitmap_get(chunk->c.small.bitmap, idx));
+    bitmap_clear(chunk->c.small.bitmap, idx);
 }
 
 static bool free_chunk_small(struct chunk_header *chunk, uint32_t offset)

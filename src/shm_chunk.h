@@ -18,7 +18,7 @@ static inline struct run_header *find_run(struct chunk_header *chunk, uint32_t o
 {
     assert(chunk->type == CHUNK_TYPE_SMALL);
     uint32_t runidx = offset / SHM_RUN_UNIT_SIZE;
-    if(runidx >= SHM_CHUNK_RUN_SIZE || !bitmap_get(chunk->small.bitmap, runidx)) {
+    if(runidx >= SHM_CHUNK_RUN_SIZE || !bitmap_get(chunk->c.small.bitmap, runidx)) {
         return NULL;
     }
     return (struct run_header*)((char*)chunk + runidx * SHM_RUN_UNIT_SIZE);
