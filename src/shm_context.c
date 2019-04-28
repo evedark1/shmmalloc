@@ -269,7 +269,12 @@ uint64_t malloc_arena(size_t size)
             shm_tree_pop(context->run_pool + runidx);
         }
     } else if(size <= CHUNK_MEDIUM_LIMIT) {
-        //TODO: medium alloc
+        uint64_t chunk_pos = get_or_new_chunk(context, CHUNK_TYPE_MEDIUM);
+        if(chunk_pos == SHM_NULL) {
+            logNotice("malloc arena new chunk full");
+            return SHM_NULL;
+        }
+        ret = malloc_chunk_medium(get_or_update_addr(chunk_pos), size);
     } else {
         size_t asize = align_size(size, SHM_CHUNK_UNIT_SIZE);
         struct shm_arena *arena = new_arena(context, ARENA_TYPE_LARGE, asize);

@@ -18,8 +18,10 @@ extern "C" {
 #define SHM_RUN_UNIT_SIZE	(4 * 1024)		// 4 KB
 #define SHM_RUN_REG_SIZE 	(SHM_RUN_UNIT_SIZE / 8)
 
+#define SHM_CHUNK_MEDIUM_UNIT (4 * 1024)	// 4 KB
 #define SHM_CHUNK_UNIT_SIZE	(1024 * 1024)	// 1 MB
 #define SHM_CHUNK_RUN_SIZE  (SHM_CHUNK_UNIT_SIZE / SHM_RUN_UNIT_SIZE)
+#define SHM_CHUNK_MEDIUM_SIZE  (SHM_CHUNK_UNIT_SIZE / SHM_CHUNK_MEDIUM_UNIT)
 
 #define SHM_ARENA_UNIT_SIZE (8 * 1024 * 1024)	// 8 MB
 #define SHM_ARENA_CHUNK_SIZE (SHM_ARENA_UNIT_SIZE/ SHM_CHUNK_UNIT_SIZE)
@@ -66,8 +68,18 @@ struct chunk_small {
     bitmap_t bitmap[BITMAP_BITS2GROUPS(SHM_CHUNK_RUN_SIZE)];
 };
 
+#define CHUNK_MEDIUM_INVALID 0
+#define CHUNK_MEDIUM_EMPTY 1
+#define CHUNK_MEDIUM_FULL 2
+struct chunk_medium_unit {
+    uint16_t type;
+    uint16_t size;
+    uint16_t next;
+};
+
 struct chunk_medium {
-    uint32_t max_empty;
+    uint16_t max_empty;
+    struct chunk_medium_unit units[SHM_CHUNK_MEDIUM_SIZE];
 };
 
 #define CHUNK_TYPE_EMPTY 0

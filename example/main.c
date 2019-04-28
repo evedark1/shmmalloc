@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include "shm_malloc.h"
 
+#define SMALL_TEST_SIZE 2048
+
 void check_exit(bool r, char *msg) {
     if(r) {
         printf("%s\n", msg);
@@ -13,12 +15,12 @@ void check_exit(bool r, char *msg) {
 }
 
 uint64_t malloc_test() {
-    uint64_t arrpos = shm_malloc(2 * 1024 * 1024);
+    uint64_t arrpos = shm_malloc(SMALL_TEST_SIZE * sizeof(uint64_t));
     check_exit(arrpos == SHM_NULL, "shm malloc error\n");
     uint64_t *addr = shm_get_addr(arrpos);
     printf("shm malloc %lx %p\n", arrpos, addr);
 
-    for(int i = 0; i < 2048; i++) {
+    for(int i = 0; i < SMALL_TEST_SIZE; i++) {
         uint64_t p = shm_malloc(8);
         check_exit(p == SHM_NULL, "shm malloc small error");
         addr[i] = p;
@@ -43,12 +45,12 @@ void read_test(uint64_t arrpos) {
     check_exit(addr == NULL, "shm reader get addr error\n");
     printf("shm read %lx %p\n", arrpos, addr);
 
-    int i;
-    for(i = 0; i < 2048; i++) {
+    uint64_t i;
+    for(i = 0; i < SMALL_TEST_SIZE; i++) {
         uint64_t *p = shm_get_addr(addr[i]);
         check_exit(p == NULL, "shm read error");
         if(*p != i) {
-            printf("read %d error\n", i);
+            printf("read %ld error\n", i);
             break;
         }
     }

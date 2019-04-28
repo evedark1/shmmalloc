@@ -73,9 +73,20 @@ void init_chunk(uint64_t pos, uint32_t type)
     memset(chunk, 0, sizeof(struct chunk_header));
     chunk->pos = pos;
     chunk->type = type;
+
     if(type == CHUNK_TYPE_SMALL) {
         // first unit used by chunk_header
         bitmap_set(chunk->c.small.bitmap, 0);
+    } else { // type == CHUNK_TYPE_MEDIUM
+        // first unit used by chunk_header
+        chunk->c.medium.max_empty = SHM_CHUNK_MEDIUM_SIZE - 1;
+        chunk->c.medium.units[0].type = CHUNK_MEDIUM_INVALID;
+        chunk->c.medium.units[0].size = 0;
+        chunk->c.medium.units[0].next = 1;
+        // init list header
+        chunk->c.medium.units[1].type = CHUNK_MEDIUM_EMPTY;
+        chunk->c.medium.units[1].size = SHM_CHUNK_MEDIUM_SIZE - 1;
+        chunk->c.medium.units[1].next = 0;
     }
 }
 
@@ -149,6 +160,119 @@ static bool free_chunk_small(struct chunk_header *chunk, uint32_t offset)
     return check;
 }
 
+void check_chunk_medium_max(struct chunk_header *chunk)
+{
+    uint16_t maxsize = 0;
+    struct chunk_medium_unit *prev = chunk->c.medium.units;
+    while(prev->next != 0) {
+        struct chunk_medium_unit *unit = chunk->c.medium.units + prev->next;
+        if(unit->size > maxsize)
+            maxsize = unit->size;
+        prev = unit;
+    }
+    chunk->c.medium.max_empty = maxsize;
+}
+
+uint64_t malloc_chunk_medium(struct chunk_header *chunk, size_t len)
+{
+    assert(chunk->type == CHUNK_TYPE_MEDIUM);
+
+    uint16_t size = align_size(len, SHM_CHUNK_MEDIUM_UNIT) / SHM_CHUNK_MEDIUM_UNIT;
+    struct chunk_medium_unit *prev = chunk->c.medium.units;
+    uint64_t ret = SHM_NULL;
+    bool check_max = false;
+
+    while(prev->next != 0) {
+        uint16_t cur = prev->next;
+        struct chunk_medium_unit *unit = chunk->c.medium.units + cur;
+        if(unit->size < size) {
+            prev = unit;
+            continue;
+        }
+
+        if(unit->size > size) {
+            if(unit->size == chunk->c.medium.max_empty)
+                check_max = true;
+            struct chunk_medium_unit *next = chunk->c.medium.units + cur + size;
+            next->type = CHUNK_MEDIUM_EMPTY;
+            next->size = unit->size - size;
+            next->next = unit->next;
+            prev->next = cur + size;
+            unit->size = size;
+        }
+        unit->type = CHUNK_MEDIUM_FULL;
+        ret = chunk->pos + cur * SHM_CHUNK_MEDIUM_UNIT;
+        break;
+    }
+
+    if(check_max)
+        check_chunk_medium_max(chunk);
+    return ret;
+}
+
+bool free_chunk_medium(struct chunk_header *chunk, uint32_t offset)
+{
+    assert(chunk->type == CHUNK_TYPE_MEDIUM);
+
+    bool check = false;
+    uint16_t free_index = offset / SHM_CHUNK_MEDIUM_UNIT;
+    if(free_index >= SHM_CHUNK_MEDIUM_SIZE) {
+        return NULL;
+    }
+    struct chunk_medium_unit *free_unit = chunk->c.medium.units + free_index;
+    if(free_unit->type != CHUNK_MEDIUM_FULL) {
+        logNotice("free chunk medium offset out of range");
+        return NULL;
+    }
+
+    uint16_t cur_index = 0;
+    struct chunk_medium_unit *curr = chunk->c.medium.units;
+    while(curr->next != 0) {
+        uint16_t next_index = curr->next;
+        struct chunk_medium_unit *next = chunk->c.medium.units + next_index;
+        assert(next->type == CHUNK_MEDIUM_EMPTY);
+
+        if(cur_index < free_index && free_index < next_index) {
+            // merge free unit and next unit
+            if(free_unit->size == next_index - free_index) {
+                free_unit->type = CHUNK_MEDIUM_EMPTY;
+                free_unit->size += next->size;
+                free_unit->next = next->next;
+                next->type = CHUNK_MEDIUM_INVALID;
+            } else {
+                free_unit->type = CHUNK_MEDIUM_EMPTY;
+                free_unit->next = next_index;
+            }
+
+            // merge free unit and current unit
+            if(curr->size == free_index - cur_index) {
+                curr->size += free_unit->size;
+                curr->next = free_unit->next;
+                free_unit->type = CHUNK_MEDIUM_INVALID;
+            } else {
+                curr->next = free_index;
+            }
+            break;
+        }
+        cur_index = next_index;
+        curr = next;
+    }
+    // find free unit in last
+    if(curr->next == 0) {
+        if(curr->size == free_index - cur_index) {
+            curr->size += free_unit->size;
+            free_unit->type = CHUNK_MEDIUM_INVALID;
+        } else {
+            curr->next = free_index;
+            free_unit->type = CHUNK_MEDIUM_EMPTY;
+            free_unit->next = 0;
+        }
+    }
+
+    // TODO: set check
+    return check;
+}
+
 bool free_chunk(struct chunk_header *chunk, uint32_t offset)
 {
     bool check = false;
@@ -157,7 +281,7 @@ bool free_chunk(struct chunk_header *chunk, uint32_t offset)
         check = free_chunk_small(chunk, offset);
         break;
     case CHUNK_TYPE_MEDIUM:
-        //TODO: chunk medium
+        check = free_chunk_medium(chunk, offset);
         break;
     default:
         logWarning("free chunk type invalid %d", chunk->type);
