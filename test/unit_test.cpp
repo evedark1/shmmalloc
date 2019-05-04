@@ -1,25 +1,36 @@
-#include "shm_op_wrapper.h"
 #include <gtest/gtest.h>
+#include <vector>
 
-TEST(TestShm, Mmap) {
-    const char *path = "/tmp/shm_test";
-    key_t key;
-    int r;
-    r = shm_get_key(path, 0, &key);
-    ASSERT_TRUE(r == 0);
+#define RB_POINTER void*
+#define RB_VALUE int
+#define RB_NULL NULL
+#define RB_GET_NODE(p) (struct rbtree_node*)(p)
+#define RB_COMPARE(a, b) (a - b)
+#include "rbtree.h"
 
-    int shmid = 0;
-    int err = 0;
-    void *addr = shm_mmap(key, 8*1024*1024, true, &shmid, &err);
-    ASSERT_TRUE(addr != NULL);
-    ASSERT_TRUE(shmid > 0);
+TEST(TestRBTree, Insert) {
+    int v[10] = {5,2,6,3,1,0,9,4,8,7};
+    std::vector<int> r;
 
-    memset(addr, 0xab, 8*1024*1024);
-    unsigned char ch = *((unsigned char*)addr + 2*1024*1024);
-    ASSERT_TRUE(ch == 0xab);
+    struct rbtree tree;
+    rbtree_init(&tree);
+    for(int i = 0; i < 10; i++) {
+        struct rbtree_node *node = (struct rbtree_node*)malloc(sizeof(struct rbtree_node));
+        node->s = node;
+        node->v = v[i];
+        rbtree_insert(&tree, node);
+    }
+    EXPECT_EQ(tree.size, 10);
 
-    r = shm_remove(shmid);
-    ASSERT_TRUE(r == 0);
+    struct rbtree_node *node = RB_GET_NODE(tree.min);
+    EXPECT_EQ(node->v, 0);
+    while(node != NULL) {
+        r.push_back(node->v);
+        node = rbtree_next(&tree, node);
+    }
+
+    std::sort(v, v + 10);
+    EXPECT_TRUE(std::equal(r.begin(), r.end(), v));
 }
 
 int main(int argc, char **argv) {

@@ -6,10 +6,6 @@
 #include <stdbool.h>
 #include "builtin_wrapper.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef uint64_t bitmap_t;
 #define BITMAP_BITS 64
 #define BITMAP_SHIFT 6	// 2^6 = 64
@@ -78,10 +74,6 @@ static inline size_t align_size(size_t size, size_t align) {
 
 // malloc and copy str
 extern char *copystr(const char *src);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif
 
