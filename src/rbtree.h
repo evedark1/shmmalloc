@@ -276,7 +276,24 @@ static struct rbtree_node *rbtree_next(struct rbtree *root, struct rbtree_node *
 
 static struct rbtree_node *rbtree_prev(struct rbtree *root, struct rbtree_node *node)
 {
-	// TODO: finish this
+    struct rbtree_node *r = NULL;
+    if(node->left != RB_NULL) {
+        node = RB_GET_NODE(node->left);
+        while(node->right != RB_NULL)
+            node = RB_GET_NODE(node->right);
+        r = node;
+    } else {
+        while(node->p != RB_NULL) {
+            struct rbtree_node *p = RB_GET_NODE(node->p);
+            if(node->s == p->left)
+                node = p;
+            else {
+                r = p;
+                break;
+            }
+        }
+    }
+    return r;
 }
 
 static struct rbtree_node *rbtree_find(struct rbtree *root, RB_VALUE val)
@@ -321,6 +338,7 @@ static struct rbtree_node *rbtree_lower(struct rbtree *root, RB_VALUE val)
 
 static void rbtree_insert(struct rbtree *root, struct rbtree_node *new_node)
 { 
+	assert(RB_GET_NODE(new_node->s) == new_node);
 	rbtree_node_init(new_node);
     root->size++;
 
@@ -359,6 +377,7 @@ static void rbtree_delete(struct rbtree *root, struct rbtree_node *node)
 	enode.color = RB_BLACK;
 	enode.s = RB_NULL;
 
+	// find replace node y
 	struct rbtree_node *x, *y;
 	RB_POINTER px;
 	if(node->left == RB_NULL) {
@@ -369,13 +388,11 @@ static void rbtree_delete(struct rbtree *root, struct rbtree_node *node)
 		y = node;
 	} else {
 		y = rbtree_min_node(RB_GET_NODE(node->right));
-		if(y->left != RB_NULL)
-            px = y->left;
-		else
-            px = y->right;
+		px = y->right;
 	}
 	x = (px != RB_NULL) ? RB_GET_NODE(px) : &enode;
 
+	// delete replace node y
 	x->p = y->p;
 	if(y->p == RB_NULL) {
         root->root = x->s;
@@ -387,13 +404,44 @@ static void rbtree_delete(struct rbtree *root, struct rbtree_node *node)
 			p->right = x->s;
 		}
 	}
+	uint8_t color = y->color;
 	
 	if(y != node) {
-		//TODO: replace value
-		node->v = y->v;
+		struct rbtree_node *t = NULL;
+		// fix if y->p == node, change x->p
+		if(y->p == node->s)
+			x->p = y->s;
+		// replace color
+		y->color = node->color;
+		// replace parent
+		if(node->p == RB_NULL) {
+			root->root = y->s;
+		} else {
+			t = RB_GET_NODE(node->p);
+			if(t->left == node->s)
+				t->left = y->s;
+			else
+				t->right = y->s;
+		}
+		y->p = node->p;
+		node->p = RB_NULL;
+		// replace left clild
+		if(node->left != RB_NULL) {
+			t = RB_GET_NODE(node->left);
+			t->p = y->s;
+		}
+		y->left = node->left;
+		node->left = RB_NULL;
+		// replace right clild
+		if(node->right != RB_NULL) {
+			t = RB_GET_NODE(node->right);
+			t->p = y->s;
+		}
+		y->right = node->right;
+		node->right = RB_NULL;
 	}
 
-	if(y->color == RB_BLACK)
+	if(color == RB_BLACK)
 		rbtree_fix_delete(root, x);
 }
 

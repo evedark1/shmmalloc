@@ -14,6 +14,8 @@ struct rbtree_node *rb_get_node(uint16_t p);
 
 static struct rbtree_node *base = NULL;
 struct rbtree_node *rb_get_node(uint16_t p) {
+    if(p == RB_NULL)
+        return NULL;
     return base + p;
 }
 
@@ -147,36 +149,45 @@ TEST(TestRBTree, Delete) {
         int t = v[i];
         struct rbtree_node *d;
         d = rbtree_find(&tree, t);
-        EXPECT_TRUE(d != NULL);
+        ASSERT_TRUE(d != NULL);
         rbtree_delete(&tree, d);
 
-        EXPECT_TRUE(rbtree_find(&tree, t) == NULL);
+        ASSERT_TRUE(rbtree_find(&tree, t) == NULL);
         ASSERT_TRUE(checkTree(&tree));
         EXPECT_EQ(tree.size, 14 - i);
     }
 }
 
-
-TEST(TestRBTree, Sorted) {
+TEST(TestRBTree, PrevNext) {
     int v[10] = {9,8,7,6,5,4,3,2,1,0};
-    std::vector<int> r;
     struct rbtree_node nodes[10];
     struct rbtree tree;
     setTestTree(&tree, v, nodes, 10);
     ASSERT_TRUE(checkTree(&tree));
 
-    struct rbtree_node *node = rbtree_min(&tree);
+    std::vector<int> r;
+    struct rbtree_node *node;
+    std::sort(v, v + 10);
+
+    node = rbtree_min(&tree);
     EXPECT_EQ(node->v, 0);
     while(node != NULL) {
         r.push_back(node->v);
         node = rbtree_next(&tree, node);
     }
-
-    std::sort(v, v + 10);
     EXPECT_TRUE(std::equal(r.begin(), r.end(), v));
+
+    r.clear();
+    node = rbtree_max(&tree);
+    EXPECT_EQ(node->v, 9);
+    while(node != NULL) {
+        r.push_back(node->v);
+        node = rbtree_prev(&tree, node);
+    }
+    EXPECT_TRUE(std::equal(r.rbegin(), r.rend(), v));
 }
 
-TEST(TestRBTree, Find) {
+TEST(TestRBTree, FindLower) {
     int v[5] = {5,3,1,9,7};
     struct rbtree_node nodes[5];
     struct rbtree tree;
