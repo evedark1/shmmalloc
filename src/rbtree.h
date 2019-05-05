@@ -29,7 +29,6 @@ struct rbtree_node{
  
 struct rbtree{
 	RB_POINTER root;
-	RB_POINTER min;
 	uint32_t size;
 };
  
@@ -56,6 +55,13 @@ static struct rbtree_node *rbtree_min_node(struct rbtree_node *node)
 	return node;
 }
 
+static struct rbtree_node *rbtree_max_node(struct rbtree_node *node)
+{
+	while(node->right != RB_NULL)
+		node = RB_GET_NODE(node->right);
+	return node;
+}
+
 static void rbtree_left_rotate(struct rbtree *root, struct rbtree_node *node)
 {
 	struct rbtree_node *x, *p;
@@ -71,13 +77,13 @@ static void rbtree_left_rotate(struct rbtree *root, struct rbtree_node *node)
 	node->p = x->s;
 	x->left = node->s;
 	if(p == NULL) {
-		root->root = x;
+		root->root = x->s;
 		x->p = RB_NULL;
 	} else {
 		if(p->left == node->s) {
-			p->left = x;
+			p->left = x->s;
 		} else {
-			p->right = x;
+			p->right = x->s;
 		}
 		x->p = p->s;
 	}
@@ -98,13 +104,13 @@ static void rbtree_right_rotate(struct rbtree *root, struct rbtree_node *node)
 	node->p = x->s;
 	x->right = node->s;
 	if(p == NULL) {
-		root->root = x;
+		root->root = x->s;
 		x->p = RB_NULL;
 	} else {
 		if(p->left == node->s) {
-			p->left = x;
+			p->left = x->s;
 		} else {
-			p->right = x;
+			p->right = x->s;
 		}
 		x->p = p->s;
 	}
@@ -163,7 +169,7 @@ static void rbtree_fix_delete(struct rbtree *root, struct rbtree_node *node)
 {
 	while(node->p != RB_NULL && node->color == BLACK) {
 		struct rbtree_node *p = RB_GET_NODE(node->p);
-		if(p->left == node) {
+		if(p->left == node->s) {
 			struct rbtree_node *w = RB_GET_NODE(p->right);
 			if(w->color == RED) {
 				w->color = BLACK;
@@ -236,8 +242,25 @@ static void rbtree_node_init(struct rbtree_node *node)
 static void rbtree_init(struct rbtree *root)
 {
 	root->root = RB_NULL;
-	root->min = RB_NULL;
 	root->size = 0;
+}
+
+static struct rbtree_node *rbtree_min(struct rbtree *root)
+{
+	struct rbtree_node *node = NULL;
+	if(root->root != RB_NULL) {
+		node = rbtree_min_node(RB_GET_NODE(root->root));
+	}
+	return node;
+}
+
+static struct rbtree_node *rbtree_max(struct rbtree *root)
+{
+	struct rbtree_node *node = NULL;
+	if(root->root != RB_NULL) {
+		node = rbtree_max_node(RB_GET_NODE(root->root));
+	}
+	return node;
 }
  
 static struct rbtree_node *rbtree_next(struct rbtree *root, struct rbtree_node *node)
@@ -262,6 +285,51 @@ static struct rbtree_node *rbtree_next(struct rbtree *root, struct rbtree_node *
     return r;
 }
 
+static struct rbtree_node *rbtree_prev(struct rbtree *root, struct rbtree_node *node)
+{
+	// TODO: finish this
+}
+
+static struct rbtree_node *rbtree_find(struct rbtree *root, RB_VALUE val)
+{
+	struct rbtree_node *r = NULL;
+	RB_POINTER node = root->root;
+	while(node != RB_NULL) {
+		struct rbtree_node *pnode = RB_GET_NODE(node);
+		int diff = RB_COMPARE(pnode->v, val);
+		if(diff < 0) {
+			node = pnode->right;
+		} else if(diff > 0) {
+			node = pnode->left;
+		} else { // diff == 0
+			r = pnode;
+			break;
+		}
+	}
+	return r;
+}
+
+static struct rbtree_node *rbtree_lower(struct rbtree *root, RB_VALUE val)
+{
+	RB_POINTER node = root->root;
+	struct rbtree_node *prev = NULL;
+	uint32_t prev_bigger = 0;
+
+	while(node != RB_NULL) {
+		struct rbtree_node *pnode = RB_GET_NODE(node);
+		if(RB_COMPARE(pnode->v, val) < 0) {
+			if(prev_bigger)
+				break;
+			node = pnode->right;
+		}else{
+			node = pnode->left;
+			prev_bigger = 1;
+		}
+		prev = pnode;
+	}
+	return prev_bigger ? prev : NULL;
+}
+
 static void rbtree_insert(struct rbtree *root, struct rbtree_node *new_node)
 { 
 	rbtree_node_init(new_node);
@@ -270,12 +338,7 @@ static void rbtree_insert(struct rbtree *root, struct rbtree_node *new_node)
 	if(root->root == RB_NULL) {
 		new_node->color = BLACK;
 		root->root = new_node->s;
-        root->min = new_node->s;
         return;
-    }
-    struct rbtree_node *min = RB_GET_NODE(root->min);
-    if(RB_COMPARE(new_node->v, min->v) < 0) {
-        root->min = new_node->s;
     }
 
 	struct rbtree_node *node = rbtree_get_prev_node(root, new_node);
@@ -291,10 +354,6 @@ static void rbtree_insert(struct rbtree *root, struct rbtree_node *new_node)
 static void rbtree_delete(struct rbtree *root, struct rbtree_node *node)
 {
     root->size--;
-    if(root->min == node->s) {
-        struct rbtree_node *next = rbtree_next(root, node);
-        root->min = (next != NULL) ? next->s : RB_NULL;
-    }
 
 	struct rbtree_node *x, *y;
 	if(node->left == RB_NULL) {
@@ -330,6 +389,5 @@ static void rbtree_delete(struct rbtree *root, struct rbtree_node *node)
 	if(y->color == BLACK)
 		rbtree_fix_delete(root, x);
 }
-
 
 #endif
