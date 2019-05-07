@@ -225,7 +225,7 @@ static void check_delete_chunk(struct shm_shared_context *context, struct chunk_
 {
     switch(chunk->type) {
     case CHUNK_TYPE_SMALL:
-        if(bitmap_ffu(chunk->c.small.bitmap, SHM_CHUNK_RUN_SIZE) >= SHM_CHUNK_RUN_SIZE) {
+        if(bitmap_ffu(chunk->c.small.bitmap, SHM_CHUNK_RUN_SIZE) == SHM_CHUNK_RUN_SIZE) {
             delete_chunk(context, chunk);
         }
         break;

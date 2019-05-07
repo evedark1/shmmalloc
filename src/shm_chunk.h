@@ -3,6 +3,7 @@
 
 #include <assert.h>
 #include "shm_type.h"
+#include "chunk_medium.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -57,7 +58,6 @@ static inline bool run_empty(struct run_header *run)
 
 extern void init_chunk(uint64_t pos, uint32_t type);
 extern struct run_header *malloc_chunk_run(struct chunk_header *chunk, uint32_t type);
-extern uint64_t malloc_chunk_medium(struct chunk_header *chunk, size_t len);
 extern bool free_chunk(struct chunk_header *chunk, uint32_t offset);
 extern size_t check_chunk(struct chunk_header *chunk, uint32_t offset);
 
