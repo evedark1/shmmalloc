@@ -1,5 +1,7 @@
-#include "shm_chunk.h"
 #include <gtest/gtest.h>
+extern "C" {
+#include "shm_chunk.h"
+}
 
 const struct run_config *find_conf(size_t size) {
     uint32_t idx = find_run_config(size);

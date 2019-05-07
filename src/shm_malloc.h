@@ -1,7 +1,7 @@
 /* shm malloc interface
  */
-#ifndef _SHM_MALLOC_H
-#define _SHM_MALLOC_H
+#ifndef _SHM_MALLOC_H_
+#define _SHM_MALLOC_H_
 
 #include <stddef.h>
 #include <stdint.h>

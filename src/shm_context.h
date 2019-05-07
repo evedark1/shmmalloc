@@ -1,11 +1,7 @@
-#ifndef _SHM_CONTEXT_H
-#define _SHM_CONTEXT_H
+#ifndef _SHM_CONTEXT_H_
+#define _SHM_CONTEXT_H_
 
 #include "shm_type.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 extern struct shm_shared_context *init_shared_context(const char *path, bool create);
 extern void exit_shared_context(struct shm_shared_context *context);
@@ -23,9 +19,5 @@ extern void unlock_context();
 static inline bool is_arena_valid(const struct shm_shared_context *context, uint32_t index) {
     return index < SHM_ARENA_MAX && context->arenas[index].type != ARENA_TYPE_EMPTY;
 }
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

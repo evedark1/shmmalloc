@@ -1,13 +1,9 @@
-#ifndef _SHM_MALLOC_INC_H
-#define _SHM_MALLOC_INC_H
+#ifndef _SHM_MALLOC_INC_H_
+#define _SHM_MALLOC_INC_H_
 
 #include <assert.h>
 #include "shm_malloc.h"
 #include "shm_type.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 extern struct shm_malloc_context local_context;
 
@@ -47,9 +43,5 @@ static inline void *get_or_update_addr(uint64_t pos)
         return NULL;
     return (char*)base + pos2offset(pos);
 }
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

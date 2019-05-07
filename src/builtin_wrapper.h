@@ -1,5 +1,5 @@
-#ifndef _BUILTIN_WRAPPER_H
-#define _BUILTIN_WRAPPER_H
+#ifndef _BUILTIN_WRAPPER_H_
+#define _BUILTIN_WRAPPER_H_
 #include <limits.h>
 
 #if (__WORDSIZE == 64)

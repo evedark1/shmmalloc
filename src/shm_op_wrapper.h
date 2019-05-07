@@ -1,17 +1,11 @@
-//shm_op_wrapper.h
-
-#ifndef _SHM_OP_WRAPPER_H
-#define _SHM_OP_WRAPPER_H
+#ifndef _SHM_OP_WRAPPER_H_
+#define _SHM_OP_WRAPPER_H_
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
 #include <pthread.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /**
 shmget & shmat
@@ -51,9 +45,4 @@ return: errno, 0 for success, != 0 fail
 */
 extern int shm_remove(int shmid);
 
-#ifdef __cplusplus
-}
 #endif
-
-#endif
-

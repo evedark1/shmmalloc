@@ -1,13 +1,9 @@
-#ifndef _SHM_TREE_H
-#define _SHM_TREE_H
+#ifndef _SHM_TREE_H_
+#define _SHM_TREE_H_
 
 #include <stdint.h>
 #include <assert.h>
 #include "shm_malloc.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 struct shm_tree_node {
     uint32_t rank;
@@ -72,9 +68,5 @@ static inline void shm_tree_remove(struct shm_pool *pool, uint64_t node)
     }
     pool->size--;
 }
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

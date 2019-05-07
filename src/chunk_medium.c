@@ -36,7 +36,7 @@ typedef struct chunk_medium_detial_t {
     bitmap_t bitmap_up[BITMAP_BITS2GROUPS(CHUNK_MEDIUM_UNITS)];
     bitmap_t bitmap_down[BITMAP_BITS2GROUPS(CHUNK_MEDIUM_UNITS)];
 } chunk_medium_detial;
-static_assert(sizeof(chunk_medium_detial) < sizeof(struct chunk_medium), "chunk medium too big");
+static_assert(sizeof(chunk_medium_detial) < sizeof(struct chunk_header) - offsetof(struct chunk_header, detial), "chunk medium too big");
 
 static void set_medium_unit(chunk_medium_detial *detial, uint16_t p)
 {
@@ -80,7 +80,8 @@ static uint16_t find_prev_medium_unit(chunk_medium_detial *detial, uint16_t p)
 
 void init_chunk_medium(struct chunk_header *chunk)
 {
-    chunk_medium_detial *detial = (chunk_medium_detial*)(&chunk->c.medium);
+    chunk_medium_detial *detial = (chunk_medium_detial*)chunk->detial;
+    medium_chunk_base = chunk;
     // first page used by chunk_header
     detial->max_size = CHUNK_MEDIUM_UNITS - 1;
     detial->free_size = CHUNK_MEDIUM_UNITS - 1;
@@ -97,7 +98,7 @@ void init_chunk_medium(struct chunk_header *chunk)
 
 static void check_chunk_medium_max(struct chunk_header *chunk, uint16_t s)
 {
-    chunk_medium_detial *detial = (chunk_medium_detial*)(&chunk->c.medium);
+    chunk_medium_detial *detial = (chunk_medium_detial*)chunk->detial;
     if(s == 0) {
         struct rbtree_node *n = rbtree_max(&detial->tree);
         s = (n == NULL) ? 0 : n->v.size;
@@ -109,7 +110,7 @@ static void check_chunk_medium_max(struct chunk_header *chunk, uint16_t s)
 uint64_t malloc_chunk_medium(struct chunk_header *chunk, size_t len)
 {
     assert(chunk->type == CHUNK_TYPE_MEDIUM);
-    chunk_medium_detial *detial = (chunk_medium_detial*)(&chunk->c.medium);
+    chunk_medium_detial *detial = (chunk_medium_detial*)chunk->detial;
     medium_chunk_base = chunk;
     uint16_t size = align_size(len, SHM_PAGE_SIZE) / SHM_PAGE_SIZE;
     uint64_t ret = SHM_NULL;
@@ -152,7 +153,7 @@ uint64_t malloc_chunk_medium(struct chunk_header *chunk, size_t len)
 bool free_chunk_medium(struct chunk_header *chunk, uint32_t offset)
 {
     assert(chunk->type == CHUNK_TYPE_MEDIUM);
-    chunk_medium_detial *detial = (chunk_medium_detial*)(&chunk->c.medium);
+    chunk_medium_detial *detial = (chunk_medium_detial*)chunk->detial;
     medium_chunk_base = chunk;
 
     // check free offset

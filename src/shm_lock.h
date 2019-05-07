@@ -1,14 +1,10 @@
-#ifndef _SHM_LOCK_H
-#define _SHM_LOCK_H
+#ifndef _SHM_LOCK_H_
+#define _SHM_LOCK_H_
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /**
 init phtread_mutex with PTHREAD_PROCESS_SHARED
@@ -33,9 +29,4 @@ parameters:
 */
 extern void shm_unlock_file(int lock_fd);
 
-#ifdef __cplusplus
-}
 #endif
-
-#endif
-

@@ -1,5 +1,5 @@
-#ifndef _SHM_TYPE_H
-#define _SHM_TYPE_H
+#ifndef _SHM_TYPE_H_
+#define _SHM_TYPE_H_
 
 #include <stddef.h>
 #include <stdint.h>
@@ -9,18 +9,11 @@
 #include "shm_util.h"
 #include "shm_tree.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #define SHM_INIT_FLAG 0x1020304a
 #define SHM_PAGE_SIZE (4 * 1024)	// 4 KB
 
-#define SHM_RUN_UNIT_SIZE	(4 * 1024)		// 4 KB
-#define SHM_RUN_REG_SIZE 	(SHM_RUN_UNIT_SIZE / 8)
-
 #define SHM_CHUNK_UNIT_SIZE	(1024 * 1024)	// 1 MB
-#define SHM_CHUNK_RUN_SIZE  (SHM_CHUNK_UNIT_SIZE / SHM_RUN_UNIT_SIZE)
+#define SHM_RUN_UNIT_SIZE	SHM_PAGE_SIZE
 
 #define SHM_ARENA_UNIT_SIZE (8 * 1024 * 1024)	// 8 MB
 #define SHM_ARENA_CHUNK_SIZE (SHM_ARENA_UNIT_SIZE/ SHM_CHUNK_UNIT_SIZE)
@@ -46,31 +39,6 @@ static inline uint32_t pos2offset(uint64_t pos)
 #define CHUNK_MEDIUM_LIMIT (1024 * 1024) // 1 MB
 #define RUN_CONFIG_SIZE 15
 
-struct run_config {
-    uint32_t index;
-    uint32_t elemsize;
-};
-
-struct run_header {
-    struct shm_tree_node node;	// must be first
-
-    uint64_t pos;
-    uint32_t conf_index;
-    uint32_t elemsize;
-    uint32_t total;
-
-    uint32_t used;
-    uint32_t free;
-};
-
-struct chunk_small {
-    bitmap_t bitmap[BITMAP_BITS2GROUPS(SHM_CHUNK_RUN_SIZE)];
-};
-
-struct chunk_medium {
-    char detial[128];
-};
-
 #define CHUNK_TYPE_EMPTY 0
 #define CHUNK_TYPE_SMALL 1
 #define CHUNK_TYPE_MEDIUM 2
@@ -79,10 +47,7 @@ struct chunk_header {
     struct shm_tree_node node;
     uint32_t type;
     uint64_t pos;
-    union {
-        struct chunk_small small;
-        struct chunk_medium medium;
-    } c;
+    char detial[128];
 };
 
 #define ARENA_TYPE_EMPTY 0
@@ -123,9 +88,5 @@ struct shm_malloc_context {
     struct shm_shared_context *shared_context;
     struct shm_arena_addr arena_addrs[SHM_ARENA_MAX];
 };
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

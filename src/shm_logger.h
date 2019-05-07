@@ -4,10 +4,6 @@
 #include <syslog.h>
 #include <sys/time.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* use local log func */
 extern void shm_log(int level, const char *format, ...);
 
@@ -20,9 +16,4 @@ extern void shm_log(int level, const char *format, ...);
 #define logInfo(fmt, args...) shm_log(LOG_INFO, fmt, ##args)
 #define logDebug(fmt, args...) shm_log(LOG_DEBUG, fmt, ##args)
 
-#ifdef __cplusplus
-}
 #endif
-
-#endif
-

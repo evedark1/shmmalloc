@@ -223,6 +223,8 @@ static uint64_t get_or_new_chunk(struct shm_shared_context *context, uint32_t ty
 
 static void check_delete_chunk(struct shm_shared_context *context, struct chunk_header *chunk)
 {
+    //TODO: delete chunk
+    /*
     switch(chunk->type) {
     case CHUNK_TYPE_SMALL:
         if(bitmap_ffu(chunk->c.small.bitmap, SHM_CHUNK_RUN_SIZE) == SHM_CHUNK_RUN_SIZE) {
@@ -230,9 +232,9 @@ static void check_delete_chunk(struct shm_shared_context *context, struct chunk_
         }
         break;
     case CHUNK_TYPE_MEDIUM:
-        //TODO: medium type
         break;
     }
+    */
 }
 
 static struct run_header *try_run_pool(struct shm_shared_context *context, uint32_t runidx)
