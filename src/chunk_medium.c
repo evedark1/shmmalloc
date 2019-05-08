@@ -1,14 +1,15 @@
 #include "chunk_medium.h"
 #include <string.h>
 #include "shm_logger.h"
+#include "shm_chunk.h"
 #define CHUNK_MEDIUM_UNITS (SHM_CHUNK_UNIT_SIZE / SHM_PAGE_SIZE)
 
+// define rbtree
 typedef struct medium_tree_value_t {
     uint16_t size;
     uint16_t index;
 } medium_tree_value;
 
-// define rbtree
 #define RB_POINTER uint16_t
 #define RB_KEY medium_tree_value
 #define RB_NULL 0
@@ -36,7 +37,7 @@ typedef struct chunk_medium_detial_t {
     bitmap_t bitmap_up[BITMAP_BITS2GROUPS(CHUNK_MEDIUM_UNITS)];
     bitmap_t bitmap_down[BITMAP_BITS2GROUPS(CHUNK_MEDIUM_UNITS)];
 } chunk_medium_detial;
-static_assert(sizeof(chunk_medium_detial) < sizeof(struct chunk_header) - offsetof(struct chunk_header, detial), "chunk medium too big");
+static_assert(sizeof(chunk_medium_detial) < sizeof(struct chunk_detial_holder), "chunk medium too big");
 
 static void set_medium_unit(chunk_medium_detial *detial, uint16_t p)
 {
@@ -78,9 +79,15 @@ static uint16_t find_prev_medium_unit(chunk_medium_detial *detial, uint16_t p)
         return CHUNK_MEDIUM_UNITS;
 }
 
+uint32_t get_medium_max_size(struct chunk_header *chunk)
+{
+    chunk_medium_detial *detial = (chunk_medium_detial*)(&chunk->detial);
+    return detial->max_size * SHM_PAGE_SIZE;
+}
+
 void init_chunk_medium(struct chunk_header *chunk)
 {
-    chunk_medium_detial *detial = (chunk_medium_detial*)chunk->detial;
+    chunk_medium_detial *detial = (chunk_medium_detial*)(&chunk->detial);
     medium_chunk_base = chunk;
     // first page used by chunk_header
     detial->max_size = CHUNK_MEDIUM_UNITS - 1;
@@ -98,19 +105,21 @@ void init_chunk_medium(struct chunk_header *chunk)
 
 static void check_chunk_medium_max(struct chunk_header *chunk, uint16_t s)
 {
-    chunk_medium_detial *detial = (chunk_medium_detial*)chunk->detial;
+    chunk_medium_detial *detial = (chunk_medium_detial*)(&chunk->detial);
     if(s == 0) {
         struct rbtree_node *n = rbtree_max(&detial->tree);
         s = (n == NULL) ? 0 : n->v.size;
     }
-    detial->max_size = s;
-    // TODO: change medium chunk order
+    if(detial->max_size != s) {
+        update_medium_chunk(chunk, s * SHM_PAGE_SIZE);
+        detial->max_size = s;
+    }
 }
 
 uint64_t malloc_chunk_medium(struct chunk_header *chunk, size_t len)
 {
     assert(chunk->type == CHUNK_TYPE_MEDIUM);
-    chunk_medium_detial *detial = (chunk_medium_detial*)chunk->detial;
+    chunk_medium_detial *detial = (chunk_medium_detial*)(&chunk->detial);
     medium_chunk_base = chunk;
     uint16_t size = align_size(len, SHM_PAGE_SIZE) / SHM_PAGE_SIZE;
     uint64_t ret = SHM_NULL;
@@ -153,11 +162,10 @@ uint64_t malloc_chunk_medium(struct chunk_header *chunk, size_t len)
 bool free_chunk_medium(struct chunk_header *chunk, uint32_t offset)
 {
     assert(chunk->type == CHUNK_TYPE_MEDIUM);
-    chunk_medium_detial *detial = (chunk_medium_detial*)chunk->detial;
+    chunk_medium_detial *detial = (chunk_medium_detial*)(&chunk->detial);
     medium_chunk_base = chunk;
 
     // check free offset
-    bool check = false;
     uint16_t curr_index = offset / SHM_PAGE_SIZE;
     if(curr_index >= CHUNK_MEDIUM_UNITS || offset % SHM_PAGE_SIZE != 0) {
         logNotice("free chunk medium offset error");
@@ -171,6 +179,7 @@ bool free_chunk_medium(struct chunk_header *chunk, uint32_t offset)
     clear_medium_unit(detial, curr_index);
     bitmap_clear(detial->bitmap_type, curr_index);
 
+    // find next unit
     uint16_t next_index = find_next_medium_unit(detial, curr_index);
     uint16_t curr_size = next_index - curr_index;
     medium_tree_value insert;
@@ -217,6 +226,27 @@ bool free_chunk_medium(struct chunk_header *chunk, uint32_t offset)
     if(curr->v.size >= detial->max_size)
         check_chunk_medium_max(chunk, curr->v.size);
 
-    // TODO: set check
-    return check;
+    return detial->free_size == CHUNK_MEDIUM_UNITS - 1;
+}
+
+size_t check_chunk_medium(struct chunk_header *chunk, uint32_t offset)
+{
+    assert(chunk->type == CHUNK_TYPE_MEDIUM);
+    chunk_medium_detial *detial = (chunk_medium_detial*)(&chunk->detial);
+    // check free offset
+    uint16_t curr_index = offset / SHM_PAGE_SIZE;
+    if(curr_index >= CHUNK_MEDIUM_UNITS || offset % SHM_PAGE_SIZE != 0) {
+        logNotice("check chunk medium offset error");
+        return 0;
+    }
+    if(!bitmap_get(detial->bitmap_type, curr_index)) {
+        logNotice("check chunk medium not used");
+        return 0;
+    }
+    assert(get_medium_unit(detial, curr_index));
+
+    // find next unit
+    uint16_t next_index = find_next_medium_unit(detial, curr_index);
+    uint16_t curr_size = next_index - curr_index;
+    return curr_size * SHM_PAGE_SIZE;
 }

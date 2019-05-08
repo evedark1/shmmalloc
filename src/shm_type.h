@@ -43,11 +43,19 @@ static inline uint32_t pos2offset(uint64_t pos)
 #define CHUNK_TYPE_SMALL 1
 #define CHUNK_TYPE_MEDIUM 2
 
+struct chunk_node_holder {
+    char c[64];
+};
+
+struct chunk_detial_holder {
+    char c[128];
+};
+
 struct chunk_header {
-    struct shm_tree_node node;
+    struct chunk_node_holder node;	// must be first
     uint32_t type;
     uint64_t pos;
-    char detial[128];
+    struct chunk_detial_holder detial;
 };
 
 #define ARENA_TYPE_EMPTY 0
@@ -60,10 +68,16 @@ struct shm_arena {
     int shmid;
     uint32_t index;
     size_t size;
+    // follow feild not used when type == ARENA_TYPE_LARGE
+    uint32_t used;
     uint64_t chunks[SHM_ARENA_CHUNK_SIZE];
 };
 
 #define SHM_ARENA_MAX 256
+
+struct context_chunk_holder {
+    char c[128];
+};
 
 struct shm_shared_context {
     uint32_t init_flag;
@@ -74,8 +88,8 @@ struct shm_shared_context {
     pthread_mutex_t mutex;	// locker for all shared memory allocator
     struct shm_arena arenas[SHM_ARENA_MAX]; // 0 used by self
     struct shm_pool run_pool[RUN_CONFIG_SIZE];
-    struct shm_pool chunk_small_pool;
-    struct shm_pool chunk_medium_pool;
+    struct context_chunk_holder chunk_small_pool;
+    struct context_chunk_holder chunk_medium_pool;
 };
 
 struct shm_arena_addr {

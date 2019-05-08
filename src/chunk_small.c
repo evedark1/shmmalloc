@@ -8,9 +8,10 @@
 static_assert(sizeof(struct run_header) <= RUN_HEADER_SIZE, "run header too big");
 
 typedef struct chunk_small_detial_t {
+    uint32_t used;
     bitmap_t bitmap[BITMAP_BITS2GROUPS(SHM_CHUNK_RUN_SIZE)];
 } chunk_small_detial;
-static_assert(sizeof(chunk_small_detial) < sizeof(struct chunk_header) - offsetof(struct chunk_header, detial), "chunk small too big");
+static_assert(sizeof(chunk_small_detial) < sizeof(struct chunk_detial_holder), "chunk small too big");
 
 const struct run_config run_config_list[RUN_CONFIG_SIZE] =
 {
@@ -73,7 +74,7 @@ uint32_t find_run_config(size_t size)
 struct run_header *find_run(struct chunk_header *chunk, uint32_t offset)
 {
     assert(chunk->type == CHUNK_TYPE_SMALL);
-    chunk_small_detial *detial = (chunk_small_detial*)chunk->detial;
+    chunk_small_detial *detial = (chunk_small_detial*)(&chunk->detial);
     uint32_t runidx = offset / SHM_RUN_UNIT_SIZE;
     if(runidx >= SHM_CHUNK_RUN_SIZE || !bitmap_get(detial->bitmap, runidx)) {
         return NULL;
@@ -83,15 +84,18 @@ struct run_header *find_run(struct chunk_header *chunk, uint32_t offset)
 
 void init_chunk_small(struct chunk_header *chunk)
 {
-    chunk_small_detial *detial = (chunk_small_detial*)chunk->detial;
+    chunk_small_detial *detial = (chunk_small_detial*)(&chunk->detial);
     // first unit used by chunk_header
+    detial->used = 1;
     bitmap_set(detial->bitmap, 0);
 }
 
 struct run_header *malloc_chunk_run(struct chunk_header *chunk, uint32_t type)
 {
+    chunk_small_detial *detial = (chunk_small_detial*)(&chunk->detial);
     assert(chunk->type == CHUNK_TYPE_SMALL);
-    chunk_small_detial *detial = (chunk_small_detial*)chunk->detial;
+    assert(detial->used < SHM_CHUNK_RUN_SIZE);
+    detial->used++;
     int32_t idx = bitmap_sfu(detial->bitmap, SHM_CHUNK_RUN_SIZE);
     assert(idx < SHM_CHUNK_RUN_SIZE);
 
@@ -125,7 +129,8 @@ struct run_header *malloc_chunk_run(struct chunk_header *chunk, uint32_t type)
 
 static void free_chunk_run(struct chunk_header *chunk, uint64_t pos)
 {
-    chunk_small_detial *detial = (chunk_small_detial*)chunk->detial;
+    chunk_small_detial *detial = (chunk_small_detial*)(&chunk->detial);
+    detial->used--;
     uint32_t idx = (pos - chunk->pos) / SHM_RUN_UNIT_SIZE;
     assert(bitmap_get(detial->bitmap, idx));
     bitmap_clear(detial->bitmap, idx);
@@ -133,11 +138,10 @@ static void free_chunk_run(struct chunk_header *chunk, uint64_t pos)
 
 bool free_chunk_small(struct chunk_header *chunk, uint32_t offset)
 {
-    bool check = false;
     struct run_header *run = find_run(chunk, offset);
     if(run == NULL) {
         logNotice("free chunk small offset out of range");
-        return check;
+        return false;
     }
 
     bool full = run_full(run);
@@ -148,14 +152,16 @@ bool free_chunk_small(struct chunk_header *chunk, uint32_t offset)
         struct shm_shared_context *context = local_context.shared_context;
         shm_tree_push(context->run_pool + run->conf_index , run->pos);
     }
+
+    bool check = false;
     if(run_empty(run)) {
         struct shm_shared_context *context = local_context.shared_context;
         struct shm_pool *pool = context->run_pool + run->conf_index;
         if(pool->size > 1) {
-            // TODO: more check
             shm_tree_remove(pool, run->pos);
             free_chunk_run(chunk, run->pos);
-            check = true;
+            chunk_small_detial *detial = (chunk_small_detial*)(&chunk->detial);
+            check = (detial->used == SHM_RUN_UNIT_SIZE);
         }
     }
     return check;

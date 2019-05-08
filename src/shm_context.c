@@ -16,11 +16,16 @@ static void init_shm_shared_field(struct shm_shared_context *context, key_t key,
     context->init_flag = SHM_INIT_FLAG;
     context->key = key;
     context->count = 0;
+    context->user_data = 0;
     shm_lock_init(&context->mutex);
+
+    // first arena used by shared context
     context->arenas[0].type = ARENA_TYPE_CONTEXT;
     context->arenas[0].shmid = shmid;
     context->arenas[0].index = 0;
     context->arenas[0].size = SHM_ARENA_UNIT_SIZE;
+    context->arenas[0].used = 1;
+    context->arenas[0].chunks[0] = index2pos(0, 1); // should not used
 }
 
 struct shm_shared_context *init_shared_context(const char *path, bool create)
@@ -119,11 +124,15 @@ static struct shm_arena *new_arena(struct shm_shared_context *context, uint32_t 
     }
     memset(addr, 0, size);
 
+    // init arena
     struct shm_arena *arena = context->arenas + index;
     arena->type = type;
     arena->shmid = shmid;
     arena->index = index;
     arena->size = size;
+    arena->used = 0;
+    memset(arena->chunks, 0, sizeof(arena->chunks));
+
     set_arena_addr(index, addr, shmid);
     logInfo("new arena create, index %u key %x shmid %u size %zu", index, key, shmid, size);
     return arena;
@@ -140,24 +149,28 @@ static void delete_arena(struct shm_shared_context *context, uint32_t index)
     shm_munmap(addr);
 }
 
-static void check_delete_arena(struct shm_shared_context *context, struct shm_arena *arena)
-{
-    // TODO: check arena empty and delete arena
-}
-
 static uint64_t new_arena_chunk(struct shm_arena *arena)
 {
     uint64_t ret = SHM_NULL;
     uint32_t idx = (arena->type == ARENA_TYPE_CONTEXT) ? 1 : 0;
     while(idx < SHM_ARENA_CHUNK_SIZE) {
-        if(arena->chunks[idx] == 0) {
+        if(arena->chunks[idx] == SHM_NULL) {
             ret = index2pos(arena->index, idx * SHM_CHUNK_UNIT_SIZE);
             arena->chunks[idx] = ret;
+            arena->used++;
             break;
         }
         idx++;
     }
     return ret;
+}
+
+static void delete_arena_chunk(struct shm_arena *arena, uint64_t pos)
+{
+    uint32_t idx = pos2offset(pos) / SHM_CHUNK_UNIT_SIZE;
+    assert(arena->chunks[idx] != SHM_NULL);
+    arena->chunks[idx] = SHM_NULL;
+    arena->used--;
 }
 
 static uint64_t new_chunk(struct shm_shared_context *context, uint32_t type)
@@ -184,32 +197,25 @@ static uint64_t new_chunk(struct shm_shared_context *context, uint32_t type)
         }
     }
 
-    // init new chunk
-    if(ret != SHM_NULL) {
+    if(ret != SHM_NULL)
         init_chunk(ret, type);
-        if(type == CHUNK_TYPE_SMALL) {
-            shm_tree_push(&context->chunk_small_pool, ret);
-        } else {
-            shm_tree_push(&context->chunk_medium_pool, ret);
-        }
-    }
     return ret;
 }
 
-static uint64_t get_or_new_chunk(struct shm_shared_context *context, uint32_t type)
+static uint64_t get_or_new_chunk(struct shm_shared_context *context, uint32_t type, size_t size)
 {
-    uint64_t chunk_pos = SHM_NULL;
-    switch(type) {
-    case CHUNK_TYPE_SMALL:
-        chunk_pos = context->chunk_small_pool.root;
-        break;
-    case CHUNK_TYPE_MEDIUM:
-        //TODO: medium type
-        break;
-    }
+    uint64_t chunk_pos = get_avaliable_chunk(type, size);
     if(chunk_pos == SHM_NULL)
         chunk_pos = new_chunk(context, type);
     return chunk_pos;
+}
+
+static void check_delete_chunk(struct shm_shared_context *context, struct shm_arena *arena, uint64_t pos)
+{
+    delete_arena_chunk(arena, pos);
+    if(arena->used == 0 && arena->type != ARENA_TYPE_CONTEXT) {
+        delete_arena(context, arena->index);
+    }
 }
 
 static struct run_header *try_run_pool(struct shm_shared_context *context, uint32_t runidx)
@@ -233,7 +239,7 @@ uint64_t malloc_arena(size_t size)
         struct run_header *run = try_run_pool(context, runidx);
 
         if(run == NULL) {
-            uint64_t chunk_pos = get_or_new_chunk(context, CHUNK_TYPE_SMALL);
+            uint64_t chunk_pos = get_or_new_chunk(context, CHUNK_TYPE_SMALL, size);
             if(chunk_pos == SHM_NULL) {
                 logNotice("malloc arena new chunk full");
                 return SHM_NULL;
@@ -246,7 +252,8 @@ uint64_t malloc_arena(size_t size)
             shm_tree_pop(context->run_pool + runidx);
         }
     } else if(size <= CHUNK_MEDIUM_LIMIT) {
-        uint64_t chunk_pos = get_or_new_chunk(context, CHUNK_TYPE_MEDIUM);
+        // TODO: CHUNK_MEDIUM_LIMIT need to adjust
+        uint64_t chunk_pos = get_or_new_chunk(context, CHUNK_TYPE_MEDIUM, size);
         if(chunk_pos == SHM_NULL) {
             logNotice("malloc arena new chunk full");
             return SHM_NULL;
@@ -284,7 +291,7 @@ void free_arena(uint32_t index, uint32_t offset)
 
             bool check = free_chunk(chunk_header, chunk_offset);
             if(check) {
-                check_delete_arena(context, arena);
+                check_delete_chunk(context, arena, chunk_pos);
             }
         } else {
             logNotice("free arena offset error, %u %u", index, offset);
