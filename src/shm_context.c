@@ -140,6 +140,11 @@ static void delete_arena(struct shm_shared_context *context, uint32_t index)
     shm_munmap(addr);
 }
 
+static void check_delete_arena(struct shm_shared_context *context, struct shm_arena *arena)
+{
+    // TODO: check arena empty and delete arena
+}
+
 static uint64_t new_arena_chunk(struct shm_arena *arena)
 {
     uint64_t ret = SHM_NULL;
@@ -191,20 +196,6 @@ static uint64_t new_chunk(struct shm_shared_context *context, uint32_t type)
     return ret;
 }
 
-static void delete_chunk(struct shm_shared_context *context, struct chunk_header *chunk)
-{
-    if(chunk->type == CHUNK_TYPE_SMALL) {
-        shm_tree_remove(&context->chunk_small_pool, chunk->pos);
-    } else {
-        shm_tree_remove(&context->chunk_medium_pool, chunk->pos);
-    }
-    struct shm_arena *arena = context->arenas + pos2index(chunk->pos);
-    uint32_t idx = pos2offset(chunk->pos) / SHM_CHUNK_UNIT_SIZE;
-    assert(arena->chunks[idx] != 0);
-    arena->chunks[idx] = 0;
-    //TODO: delete arena
-}
-
 static uint64_t get_or_new_chunk(struct shm_shared_context *context, uint32_t type)
 {
     uint64_t chunk_pos = SHM_NULL;
@@ -219,22 +210,6 @@ static uint64_t get_or_new_chunk(struct shm_shared_context *context, uint32_t ty
     if(chunk_pos == SHM_NULL)
         chunk_pos = new_chunk(context, type);
     return chunk_pos;
-}
-
-static void check_delete_chunk(struct shm_shared_context *context, struct chunk_header *chunk)
-{
-    //TODO: delete chunk
-    /*
-    switch(chunk->type) {
-    case CHUNK_TYPE_SMALL:
-        if(bitmap_ffu(chunk->c.small.bitmap, SHM_CHUNK_RUN_SIZE) == SHM_CHUNK_RUN_SIZE) {
-            delete_chunk(context, chunk);
-        }
-        break;
-    case CHUNK_TYPE_MEDIUM:
-        break;
-    }
-    */
 }
 
 static struct run_header *try_run_pool(struct shm_shared_context *context, uint32_t runidx)
@@ -309,7 +284,7 @@ void free_arena(uint32_t index, uint32_t offset)
 
             bool check = free_chunk(chunk_header, chunk_offset);
             if(check) {
-                check_delete_chunk(context, chunk_header);
+                check_delete_arena(context, arena);
             }
         } else {
             logNotice("free arena offset error, %u %u", index, offset);

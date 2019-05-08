@@ -6,7 +6,7 @@
 struct rbtree_node *rb_get_node(uint16_t p);
 
 #define RB_POINTER uint16_t
-#define RB_VALUE int
+#define RB_KEY int
 #define RB_NULL 0xffff 
 #define RB_GET_NODE(p) rb_get_node(p)
 #define RB_COMPARE(a, b) (a - b)

@@ -7,11 +7,11 @@
 // user should define follow marco
 #ifndef RB_POINTER
 #define RB_POINTER uint16_t
-#define RB_VALUE uint16_t
+#define RB_KEY uint16_t
 #define RB_NULL 0
 extern struct rbtree_node *get_node(RB_POINTER p);
 #define RB_GET_NODE(p) get_node(p)
-extern int compare(RB_VALUE a, RB_VALUE b);
+extern int compare(RB_KEY a, RB_KEY b);
 #define RB_COMPARE(a, b) compare(a, b)
 #endif
 
@@ -23,7 +23,7 @@ struct rbtree_node{
 	RB_POINTER p;
 	RB_POINTER left;
 	RB_POINTER right;
-	RB_VALUE v;
+    RB_KEY v;
 	uint8_t color;
 };
  
@@ -296,7 +296,7 @@ static struct rbtree_node *rbtree_prev(struct rbtree *root, struct rbtree_node *
     return r;
 }
 
-static struct rbtree_node *rbtree_find(struct rbtree *root, RB_VALUE val)
+static struct rbtree_node *rbtree_find(struct rbtree *root, RB_KEY val)
 {
 	struct rbtree_node *r = NULL;
 	RB_POINTER node = root->root;
@@ -315,7 +315,7 @@ static struct rbtree_node *rbtree_find(struct rbtree *root, RB_VALUE val)
 	return r;
 }
 
-static struct rbtree_node *rbtree_lower(struct rbtree *root, RB_VALUE val)
+static struct rbtree_node *rbtree_lower(struct rbtree *root, RB_KEY val)
 {
 	RB_POINTER node = root->root;
 	struct rbtree_node *prev = NULL;

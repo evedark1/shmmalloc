@@ -152,6 +152,7 @@ bool free_chunk_small(struct chunk_header *chunk, uint32_t offset)
         struct shm_shared_context *context = local_context.shared_context;
         struct shm_pool *pool = context->run_pool + run->conf_index;
         if(pool->size > 1) {
+            // TODO: more check
             shm_tree_remove(pool, run->pos);
             free_chunk_run(chunk, run->pos);
             check = true;

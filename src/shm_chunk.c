@@ -19,6 +19,19 @@ void init_chunk(uint64_t pos, uint32_t type)
     }
 }
 
+static void delete_chunk(struct shm_shared_context *context, struct chunk_header *chunk)
+{
+    if(chunk->type == CHUNK_TYPE_SMALL) {
+        shm_tree_remove(&context->chunk_small_pool, chunk->pos);
+    } else {
+        shm_tree_remove(&context->chunk_medium_pool, chunk->pos);
+    }
+    struct shm_arena *arena = context->arenas + pos2index(chunk->pos);
+    uint32_t idx = pos2offset(chunk->pos) / SHM_CHUNK_UNIT_SIZE;
+    assert(arena->chunks[idx] != 0);
+    arena->chunks[idx] = 0;
+}
+
 bool free_chunk(struct chunk_header *chunk, uint32_t offset)
 {
     bool check = false;
@@ -33,6 +46,8 @@ bool free_chunk(struct chunk_header *chunk, uint32_t offset)
         logWarning("free chunk type invalid %d", chunk->type);
         break;
     }
+    if(check)
+        delete_chunk(local_context.shared_context, chunk);
     return check;
 }
 

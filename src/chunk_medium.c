@@ -10,7 +10,7 @@ typedef struct medium_tree_value_t {
 
 // define rbtree
 #define RB_POINTER uint16_t
-#define RB_VALUE medium_tree_value
+#define RB_KEY medium_tree_value
 #define RB_NULL 0
 
 struct chunk_header *medium_chunk_base = NULL;
@@ -19,7 +19,7 @@ static inline void *medium_tree_get(RB_POINTER p) {
 }
 #define RB_GET_NODE(p) medium_tree_get(p)
 
-static inline int medium_tree_compare(RB_VALUE a, RB_VALUE b) {
+static inline int medium_tree_compare(RB_KEY a, RB_KEY b) {
     uint16_t r = a.size - b.size;
     if(r != 0)
         return r;
