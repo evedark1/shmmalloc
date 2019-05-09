@@ -47,6 +47,14 @@ return malloc pos, 0 for fail
 extern uint64_t shm_realloc(uint64_t pos, size_t size);
 
 /*
+shm check size, return avaliable size
+parameters:
+    pos: check position
+return malloc pos, 0 for fail
+*/
+extern size_t shm_check_size(uint64_t pos);
+
+/*
 shm set user data, user data is shared between diff process
 parameters:
     data: user data to set

@@ -61,7 +61,7 @@ uint64_t get_avaliable_chunk(uint32_t type, size_t size)
         chunk_tree_value v;
         v.index = 0;
         v.maxsize = size;
-        chunk = (struct chunk_header*)rbtree_lower((chunk_tree*)&context->chunk_small_pool, v);
+        chunk = (struct chunk_header*)rbtree_lower((chunk_tree*)&context->chunk_medium_pool, v);
     }
     return chunk != NULL ? chunk->pos : SHM_NULL;
 }

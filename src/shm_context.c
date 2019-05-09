@@ -250,9 +250,9 @@ uint64_t malloc_arena(size_t size)
         ret = run->pos + malloc_run(run);
         if(run_full(run)) {
             shm_tree_pop(context->run_pool + runidx);
+            // TODO: change small chunk avaliable size 0
         }
     } else if(size <= CHUNK_MEDIUM_LIMIT) {
-        // TODO: CHUNK_MEDIUM_LIMIT need to adjust
         uint64_t chunk_pos = get_or_new_chunk(context, CHUNK_TYPE_MEDIUM, size);
         if(chunk_pos == SHM_NULL) {
             logNotice("malloc arena new chunk full");

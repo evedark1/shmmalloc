@@ -86,6 +86,19 @@ uint64_t shm_realloc(uint64_t pos, size_t size)
     return ret;
 }
 
+size_t shm_check_size(uint64_t pos)
+{
+    if(pos == SHM_NULL)
+        return 0;
+    uint32_t index = pos2index(pos);
+    uint32_t offset = pos2offset(pos);
+
+    lock_context();
+    size_t checksize = check_arena(index, offset);
+    unlock_context();
+    return checksize;
+}
+
 void shm_set_userdata(uint64_t data)
 {
     local_context.shared_context->user_data = data;
