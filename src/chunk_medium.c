@@ -111,7 +111,7 @@ static void check_chunk_medium_max(struct chunk_header *chunk, uint16_t s)
         s = (n == NULL) ? 0 : n->v.size;
     }
     if(detial->max_size != s) {
-        update_medium_chunk(chunk, s * SHM_PAGE_SIZE);
+        update_chunk_pool(chunk, s * SHM_PAGE_SIZE);
         detial->max_size = s;
     }
 }

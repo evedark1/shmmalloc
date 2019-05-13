@@ -71,12 +71,6 @@ void exit_shared_context(struct shm_shared_context *context)
     }
 }
 
-static inline uint64_t get_arena_chunk(struct shm_arena *arena, uint32_t offset) {
-    if(offset >= arena->size)
-        return SHM_NULL;
-    return arena->chunks[offset / SHM_CHUNK_UNIT_SIZE];
-}
-
 void *mmap_arena(struct shm_shared_context *context, uint32_t index)
 {
     struct shm_arena *arena = context->arenas + index;
@@ -173,15 +167,15 @@ static void delete_arena_chunk(struct shm_arena *arena, uint64_t pos)
     arena->used--;
 }
 
-static uint64_t new_chunk(struct shm_shared_context *context, uint32_t type)
+static struct chunk_header *new_chunk(struct shm_shared_context *context, uint32_t type)
 {
-    uint64_t ret = SHM_NULL;
+    uint64_t pos = SHM_NULL;
     uint32_t emptyIndex = 0;
     // find arena can alloc chunk
     for(uint32_t i = 0; i < SHM_ARENA_MAX; i++) {
         struct shm_arena *arena = context->arenas + i;
         if(arena->type == ARENA_TYPE_CONTEXT || arena->type == ARENA_TYPE_CONTEXT) {
-            if((ret = new_arena_chunk(arena)) != SHM_NULL)
+            if((pos = new_arena_chunk(arena)) != SHM_NULL)
                 break;
         } else if(arena->type == ARENA_TYPE_EMPTY) {
             emptyIndex = i;
@@ -189,25 +183,28 @@ static uint64_t new_chunk(struct shm_shared_context *context, uint32_t type)
     }
 
     // alloc new arena
-    if(ret == SHM_NULL && emptyIndex != 0) {
+    if(pos == SHM_NULL && emptyIndex != 0) {
         struct shm_arena *arena = new_arena(context, ARENA_TYPE_CHUNK, SHM_ARENA_UNIT_SIZE);
         if(arena != NULL) {
-            ret = new_arena_chunk(arena);
-            assert(ret != SHM_NULL);
+            pos = new_arena_chunk(arena);
+            assert(pos != SHM_NULL);
         }
     }
 
-    if(ret != SHM_NULL)
-        init_chunk(ret, type);
-    return ret;
+    struct chunk_header *chunk = NULL;
+    if(pos != SHM_NULL) {
+        chunk = get_or_update_addr(pos);
+        init_chunk(chunk, pos, type);
+    }
+    return chunk;
 }
 
-static uint64_t get_or_new_chunk(struct shm_shared_context *context, uint32_t type, size_t size)
+static struct chunk_header *get_or_new_chunk(struct shm_shared_context *context, uint32_t type, size_t size)
 {
-    uint64_t chunk_pos = get_avaliable_chunk(type, size);
-    if(chunk_pos == SHM_NULL)
-        chunk_pos = new_chunk(context, type);
-    return chunk_pos;
+    struct chunk_header *chunk = get_avaliable_chunk(type, size);
+    if(chunk == NULL)
+        chunk = new_chunk(context, type);
+    return chunk;
 }
 
 static void check_delete_chunk(struct shm_shared_context *context, struct shm_arena *arena, uint64_t pos)
@@ -239,26 +236,22 @@ uint64_t malloc_arena(size_t size)
         struct run_header *run = try_run_pool(context, runidx);
 
         if(run == NULL) {
-            uint64_t chunk_pos = get_or_new_chunk(context, CHUNK_TYPE_SMALL, size);
-            if(chunk_pos == SHM_NULL) {
+            struct chunk_header *chunk = get_or_new_chunk(context, CHUNK_TYPE_SMALL, size);
+            if(chunk == NULL) {
                 logNotice("malloc arena new chunk full");
                 return SHM_NULL;
             }
-            run = malloc_chunk_run(get_or_update_addr(chunk_pos), runidx);
+            run = new_chunk_run(chunk, runidx);
         }
         assert(run != NULL);
-        ret = run->pos + malloc_run(run);
-        if(run_full(run)) {
-            shm_tree_pop(context->run_pool + runidx);
-            // TODO: change small chunk avaliable size 0
-        }
+        ret = malloc_chunk_run(run);
     } else if(size <= CHUNK_MEDIUM_LIMIT) {
-        uint64_t chunk_pos = get_or_new_chunk(context, CHUNK_TYPE_MEDIUM, size);
-        if(chunk_pos == SHM_NULL) {
+        struct chunk_header *chunk = get_or_new_chunk(context, CHUNK_TYPE_MEDIUM, size);
+        if(chunk == NULL) {
             logNotice("malloc arena new chunk full");
             return SHM_NULL;
         }
-        ret = malloc_chunk_medium(get_or_update_addr(chunk_pos), size);
+        ret = malloc_chunk_medium(chunk, size);
     } else {
         size_t asize = align_size(size, SHM_CHUNK_UNIT_SIZE);
         struct shm_arena *arena = new_arena(context, ARENA_TYPE_LARGE, asize);

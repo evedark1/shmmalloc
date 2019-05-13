@@ -9,7 +9,7 @@ static_assert(sizeof(struct chunk_header) <= SHM_RUN_UNIT_SIZE, "chunk header to
 // define rbtree
 typedef struct chunk_tree_value_t {
     uint32_t index;
-    uint32_t maxsize;	// only used by medium chunk
+    uint32_t maxsize;	// small : 0 or 1, medium: max size left
 } chunk_tree_value;
 
 #define RB_POINTER uint64_t
@@ -29,10 +29,9 @@ typedef struct rbtree_node chunk_node;
 static_assert(sizeof(chunk_tree) < sizeof(struct context_chunk_holder), "chunk rbtree too big");
 static_assert(sizeof(chunk_node) < sizeof(struct chunk_node_holder), "chunk rbtree node too big");
 
-void init_chunk(uint64_t pos, uint32_t type)
+void init_chunk(struct chunk_header *chunk, uint64_t pos, uint32_t type)
 {
     struct shm_shared_context *context = local_context.shared_context;
-    struct chunk_header *chunk = get_or_update_addr(pos);
     memset(chunk, 0, sizeof(struct chunk_header));
     chunk->pos = pos;
     chunk->type = type;
@@ -42,7 +41,7 @@ void init_chunk(uint64_t pos, uint32_t type)
     node->v.index = pos2index(pos);
     if(type == CHUNK_TYPE_SMALL) {
         init_chunk_small(chunk);
-        node->v.maxsize = 0;
+        node->v.maxsize = 1;
         rbtree_insert((chunk_tree*)&context->chunk_small_pool, node);
     } else { // type == CHUNK_TYPE_MEDIUM
         init_chunk_medium(chunk);
@@ -51,19 +50,22 @@ void init_chunk(uint64_t pos, uint32_t type)
     }
 }
 
-uint64_t get_avaliable_chunk(uint32_t type, size_t size)
+struct chunk_header *get_avaliable_chunk(uint32_t type, size_t size)
 {
     struct shm_shared_context *context = local_context.shared_context;
     struct chunk_header *chunk = NULL;
+    chunk_tree_value v;
+
     if(type == CHUNK_TYPE_SMALL) {
-        chunk = (struct chunk_header*)rbtree_min((chunk_tree*)&context->chunk_small_pool);
+        v.index = 0;
+        v.maxsize = 1;
+        chunk = (struct chunk_header*)rbtree_lower((chunk_tree*)&context->chunk_small_pool, v);
     } else {
-        chunk_tree_value v;
         v.index = 0;
         v.maxsize = size;
         chunk = (struct chunk_header*)rbtree_lower((chunk_tree*)&context->chunk_medium_pool, v);
     }
-    return chunk != NULL ? chunk->pos : SHM_NULL;
+    return chunk;
 }
 
 static void delete_chunk(struct chunk_header *chunk)
@@ -113,11 +115,17 @@ size_t check_chunk(struct chunk_header *chunk, uint32_t offset)
     return ret;
 }
 
-void update_medium_chunk(struct chunk_header *chunk, uint32_t new_max)
+void update_chunk_pool(struct chunk_header *chunk, uint32_t new_max)
 {
     struct shm_shared_context *context = local_context.shared_context;
     chunk_node *node = (chunk_node*)chunk;
-    rbtree_delete((chunk_tree*)&context->chunk_medium_pool, node);
+    chunk_tree *tree;
+    if(chunk->type == CHUNK_TYPE_SMALL)
+        tree = (chunk_tree*)&context->chunk_small_pool;
+    else
+        tree = (chunk_tree*)&context->chunk_medium_pool;
+
+    rbtree_delete(tree, node);
     node->v.maxsize = new_max;
-    rbtree_insert((chunk_tree*)&context->chunk_medium_pool, node);
+    rbtree_insert(tree, node);
 }

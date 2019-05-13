@@ -22,17 +22,16 @@ int shm_init(const char *path, int create)
     if(atexit(shm_exit) != 0)
         return -1;
 
-    if((local_context.shared_context = init_shared_context(path, create)) == NULL)
+    struct shm_shared_context *context;
+    if((context = init_shared_context(path, create)) == NULL)
         return -1;
 
-    struct shm_shared_context *context = local_context.shared_context;
+    local_context.shared_context = context;
     lock_context();
-    local_context.arena_addrs[0].addr = local_context.shared_context;
-    local_context.arena_addrs[0].shmid = context->arenas[0].shmid;
+    set_arena_addr(0, context, context->arenas[0].shmid);
     for(uint32_t i = 1; i < SHM_ARENA_MAX; i++) {
         if(is_arena_valid(context, i)) {
-            local_context.arena_addrs[i].addr = mmap_arena(context, i);
-            local_context.arena_addrs[i].shmid = context->arenas[i].shmid;
+            set_arena_addr(i, mmap_arena(context, i), context->arenas[i].shmid);
         }
     }
     unlock_context();

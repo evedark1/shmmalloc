@@ -35,7 +35,7 @@ static inline uint32_t pos2offset(uint64_t pos)
     return (uint32_t)pos;
 }
 
-#define CHUNK_SMALL_LIMIT 2048			// 2 KB
+#define CHUNK_SMALL_LIMIT 1920
 #define CHUNK_MEDIUM_LIMIT (SHM_CHUNK_UNIT_SIZE - SHM_PAGE_SIZE)
 #define RUN_CONFIG_SIZE 15
 
@@ -72,6 +72,12 @@ struct shm_arena {
     uint32_t used;
     uint64_t chunks[SHM_ARENA_CHUNK_SIZE];
 };
+
+static inline uint64_t get_arena_chunk(struct shm_arena *arena, uint32_t offset) {
+    if(offset >= arena->size)
+        return SHM_NULL;
+    return arena->chunks[offset / SHM_CHUNK_UNIT_SIZE];
+}
 
 #define SHM_ARENA_MAX 128
 

@@ -2,6 +2,7 @@
 #include <string.h>
 #include "shm_logger.h"
 #include "shm_malloc_inc.h"
+#include "shm_chunk.h"
 
 #define SHM_CHUNK_RUN_SIZE  (SHM_CHUNK_UNIT_SIZE / SHM_RUN_UNIT_SIZE)
 #define RUN_HEADER_SIZE 64
@@ -82,6 +83,37 @@ struct run_header *find_run(struct chunk_header *chunk, uint32_t offset)
     return (struct run_header*)((char*)chunk + runidx * SHM_RUN_UNIT_SIZE);
 }
 
+static inline uint32_t malloc_run(struct run_header *run)
+{
+    uint32_t offset = run->free;
+    assert(offset != RUN_LIST_NULL);
+    assert(run->used < run->total);
+
+    char *next = (char*)run + offset;
+    run->free = *(uint32_t*)next;
+    run->used++;
+    return offset;
+}
+
+static inline void free_run(struct run_header *run, uint32_t offset)
+{
+    assert(run->used > 0);
+    char *next = (char*)run + offset;
+    *(uint32_t*)next = run->free;
+    run->free = offset;
+    run->used--;
+}
+
+static inline bool run_full(struct run_header *run)
+{
+    return run->used == run->total;
+}
+
+static inline bool run_empty(struct run_header *run)
+{
+    return run->used == 0;
+}
+
 void init_chunk_small(struct chunk_header *chunk)
 {
     chunk_small_detial *detial = (chunk_small_detial*)(&chunk->detial);
@@ -90,7 +122,7 @@ void init_chunk_small(struct chunk_header *chunk)
     bitmap_set(detial->bitmap, 0);
 }
 
-struct run_header *malloc_chunk_run(struct chunk_header *chunk, uint32_t type)
+struct run_header *new_chunk_run(struct chunk_header *chunk, uint32_t type)
 {
     chunk_small_detial *detial = (chunk_small_detial*)(&chunk->detial);
     assert(chunk->type == CHUNK_TYPE_SMALL);
@@ -124,7 +156,21 @@ struct run_header *malloc_chunk_run(struct chunk_header *chunk, uint32_t type)
     // add to run pool
     struct shm_shared_context *context = local_context.shared_context;
     shm_tree_push(context->run_pool + type, run->pos);
+
+    // adjust chunk tree
+    if(detial->used == SHM_CHUNK_RUN_SIZE)
+        update_chunk_pool(chunk, 0);
     return run;
+}
+
+uint64_t malloc_chunk_run(struct run_header *run)
+{
+    struct shm_shared_context *context = local_context.shared_context;
+    uint64_t r = run->pos + malloc_run(run);
+    if(run_full(run)) {
+        shm_tree_pop(context->run_pool + run->conf_index);
+    }
+    return r;
 }
 
 static void free_chunk_run(struct chunk_header *chunk, uint64_t pos)
@@ -159,9 +205,12 @@ bool free_chunk_small(struct chunk_header *chunk, uint32_t offset)
         struct shm_pool *pool = context->run_pool + run->conf_index;
         if(pool->size > 1) {
             shm_tree_remove(pool, run->pos);
-            free_chunk_run(chunk, run->pos);
+
             chunk_small_detial *detial = (chunk_small_detial*)(&chunk->detial);
-            check = (detial->used == SHM_RUN_UNIT_SIZE);
+            if(detial->used == SHM_CHUNK_RUN_SIZE)
+                update_chunk_pool(chunk, 1);
+            free_chunk_run(chunk, run->pos);
+            check = (detial->used == 1);
         }
     }
     return check;
