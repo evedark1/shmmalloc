@@ -12,6 +12,7 @@ typedef struct chunk_tree_value_t {
     uint32_t maxsize;	// small : 0 or 1, medium: max size left
 } chunk_tree_value;
 
+#define RB_NAME(name) chunk_##name
 #define RB_POINTER uint64_t
 #define RB_KEY chunk_tree_value
 #define RB_NULL SHM_NULL
@@ -24,8 +25,6 @@ static inline int chunk_tree_compare(RB_KEY a, RB_KEY b) {
 }
 #define RB_COMPARE(a, b) chunk_tree_compare(a, b)
 #include "rbtree.h"
-typedef struct rbtree chunk_tree;
-typedef struct rbtree_node chunk_node;
 static_assert(sizeof(chunk_tree) < sizeof(struct context_chunk_holder), "chunk rbtree too big");
 static_assert(sizeof(chunk_node) < sizeof(struct chunk_node_holder), "chunk rbtree node too big");
 

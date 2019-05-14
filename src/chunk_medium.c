@@ -10,6 +10,7 @@ typedef struct medium_tree_value_t {
     uint16_t index;
 } medium_tree_value;
 
+#define RB_NAME(name) medium_##name
 #define RB_POINTER uint16_t
 #define RB_KEY medium_tree_value
 #define RB_NULL 0
@@ -32,7 +33,7 @@ static inline int medium_tree_compare(RB_KEY a, RB_KEY b) {
 typedef struct chunk_medium_detial_t {
     uint16_t max_size;
     uint16_t free_size;
-    struct rbtree tree;
+    medium_tree tree;
     bitmap_t bitmap_type[BITMAP_BITS2GROUPS(CHUNK_MEDIUM_UNITS)];	// 0 free, 1 used
     bitmap_t bitmap_up[BITMAP_BITS2GROUPS(CHUNK_MEDIUM_UNITS)];
     bitmap_t bitmap_down[BITMAP_BITS2GROUPS(CHUNK_MEDIUM_UNITS)];
@@ -94,7 +95,7 @@ void init_chunk_medium(struct chunk_header *chunk)
     detial->free_size = CHUNK_MEDIUM_UNITS - 1;
     // init free tree
     rbtree_init(&detial->tree);
-    struct rbtree_node *first_node = medium_tree_get(1);
+    medium_node *first_node = medium_tree_get(1);
     first_node->v.size = CHUNK_MEDIUM_UNITS - 1;
     first_node ->v.index = 1;
     first_node->s = 1;
@@ -107,7 +108,7 @@ static void check_chunk_medium_max(struct chunk_header *chunk, uint16_t s)
 {
     chunk_medium_detial *detial = (chunk_medium_detial*)(&chunk->detial);
     if(s == 0) {
-        struct rbtree_node *n = rbtree_max(&detial->tree);
+        medium_node *n = rbtree_max(&detial->tree);
         s = (n == NULL) ? 0 : n->v.size;
     }
     if(detial->max_size != s) {
@@ -126,7 +127,7 @@ uint64_t malloc_chunk_medium(struct chunk_header *chunk, size_t len)
 
     // find first match free node
     medium_tree_value key = {size, 0};
-    struct rbtree_node *n = rbtree_lower(&detial->tree, key);
+    medium_node *n = rbtree_lower(&detial->tree, key);
     assert(n != NULL);
     assert(n->v.size >= size && n->v.index == n->s);
 
@@ -136,7 +137,7 @@ uint64_t malloc_chunk_medium(struct chunk_header *chunk, size_t len)
         uint16_t next_size = n->v.size - size;
         assert(next_index + next_size <= CHUNK_MEDIUM_UNITS);
 
-        struct rbtree_node *next_unit = medium_tree_get(next_index);
+        medium_node *next_unit = medium_tree_get(next_index);
         next_unit->v.size = next_size;
         next_unit->v.index = next_index;
         next_unit->s = next_index;
@@ -188,7 +189,7 @@ bool free_chunk_medium(struct chunk_header *chunk, uint32_t offset)
 
     // merge current unit and next unit
     if(next_index != CHUNK_MEDIUM_UNITS && !bitmap_get(detial->bitmap_type, next_index)) {
-        struct rbtree_node *n = medium_tree_get(next_index);
+        medium_node *n = medium_tree_get(next_index);
         assert(n->s == next_index && n->v.size);
         insert.size += n->v.size;
 
@@ -202,7 +203,7 @@ bool free_chunk_medium(struct chunk_header *chunk, uint32_t offset)
     // merge current unit and previous unit
     uint16_t prev_index = find_prev_medium_unit(detial, curr_index);
     if(prev_index != CHUNK_MEDIUM_UNITS && !bitmap_get(detial->bitmap_type, prev_index)) {
-        struct rbtree_node *n = medium_tree_get(prev_index);
+        medium_node *n = medium_tree_get(prev_index);
         assert(n->s == prev_index && n->v.size);
         insert.index = prev_index;
         insert.size += n->v.size;
@@ -215,7 +216,7 @@ bool free_chunk_medium(struct chunk_header *chunk, uint32_t offset)
     }
 
     // add new free unit
-    struct rbtree_node *curr = medium_tree_get(insert.index);
+    medium_node *curr = medium_tree_get(insert.index);
     curr->v = insert;
     curr->s = insert.index;
     rbtree_insert(&detial->tree, curr);

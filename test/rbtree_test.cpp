@@ -3,27 +3,28 @@
 #include <algorithm>
 #include <stdint.h>
 
-struct rbtree_node *rb_get_node(uint16_t p);
+void *rb_get_node(uint16_t p);
 
+#define RB_NAME(name) rbtree_##name
 #define RB_POINTER uint16_t
 #define RB_KEY int
 #define RB_NULL 0xffff 
-#define RB_GET_NODE(p) rb_get_node(p)
+#define RB_GET_NODE(p) (rbtree_node*)rb_get_node(p)
 #define RB_COMPARE(a, b) (a - b)
 #include "rbtree.h"
 
-static struct rbtree_node *base = NULL;
-struct rbtree_node *rb_get_node(uint16_t p) {
+static rbtree_node *base = NULL;
+void *rb_get_node(uint16_t p) {
     if(p == RB_NULL)
         return NULL;
     return base + p;
 }
 
-void setTestTree(struct rbtree *tree, int *v, struct rbtree_node *nodes, int len) {
+void setTestTree(rbtree_tree *tree, int *v, rbtree_node *nodes, int len) {
     base = nodes;
     rbtree_init(tree);
     for(int i = 0; i < len; i++) {
-        struct rbtree_node *node = nodes + i;
+        rbtree_node *node = nodes + i;
         node->s = i;
         node->v = v[i];
         rbtree_insert(tree, node);
@@ -33,7 +34,7 @@ void setTestTree(struct rbtree *tree, int *v, struct rbtree_node *nodes, int len
 void dumpTreeMid(RB_POINTER p) {
     if(p == RB_NULL)
         return;
-    struct rbtree_node *n = RB_GET_NODE(p);
+    rbtree_node *n = RB_GET_NODE(p);
     dumpTreeMid(n->left);
     std::cout << n->v << ":" << int(n->color) << " ";
     dumpTreeMid(n->right);
@@ -42,13 +43,13 @@ void dumpTreeMid(RB_POINTER p) {
 void dumpTreePre(RB_POINTER p) {
     if(p == RB_NULL)
         return;
-    struct rbtree_node *n = RB_GET_NODE(p);
+    rbtree_node *n = RB_GET_NODE(p);
     std::cout << n->v << ":" << int(n->color) << " ";
     dumpTreePre(n->left);
     dumpTreePre(n->right);
 }
 
-void dumpTree(struct rbtree *tree) {
+void dumpTree(rbtree_tree *tree) {
     std::cout << "pre: ";
     dumpTreePre(tree->root);
     std::cout << std::endl;
@@ -58,16 +59,16 @@ void dumpTree(struct rbtree *tree) {
     std::cout << std::endl;
 }
 
-bool checkTreeOrder(struct rbtree_node *node) {
+bool checkTreeOrder(rbtree_node *node) {
     if(node->left != RB_NULL) {
-        struct rbtree_node *l = RB_GET_NODE(node->left);
+        rbtree_node *l = RB_GET_NODE(node->left);
         if(RB_COMPARE(l->v, node->v) < 0)
             return checkTreeOrder(l);
         else
             return false;
     }
     if(node->right != RB_NULL) {
-        struct rbtree_node *r = RB_GET_NODE(node->right);
+        rbtree_node *r = RB_GET_NODE(node->right);
         if(RB_COMPARE(node->v, r->v) < 0)
             return checkTreeOrder(r);
         else
@@ -76,7 +77,7 @@ bool checkTreeOrder(struct rbtree_node *node) {
     return true;
 }
 
-bool checkTreeDeep(struct rbtree_node *node, int deep, int target) {
+bool checkTreeDeep(rbtree_node *node, int deep, int target) {
     if(node->color == RB_BLACK)
         deep++;
 
@@ -85,22 +86,22 @@ bool checkTreeDeep(struct rbtree_node *node, int deep, int target) {
     }
 
     if(node->left != RB_NULL) {
-        struct rbtree_node *l = RB_GET_NODE(node->left);
+        rbtree_node *l = RB_GET_NODE(node->left);
         if(!checkTreeDeep(l, deep, target))
             return false;
     }
     if(node->right != RB_NULL) {
-        struct rbtree_node *r = RB_GET_NODE(node->right);
+        rbtree_node *r = RB_GET_NODE(node->right);
         if(!checkTreeDeep(r, deep, target))
             return false;
     }
     return true;
 }
 
-bool checkTree(struct rbtree *tree) {
+bool checkTree(rbtree_tree *tree) {
     if(tree->root == RB_NULL)
         return true;
-    struct rbtree_node *root = RB_GET_NODE(tree->root);
+    rbtree_node *root = RB_GET_NODE(tree->root);
     if(!checkTreeOrder(root)) {
         std::cout << "tree order error:" << std::endl;
         dumpTree(tree);
@@ -108,7 +109,7 @@ bool checkTree(struct rbtree *tree) {
     }
 
     int deep = 0;
-    struct rbtree_node *node = root;
+    rbtree_node *node = root;
     while(node != NULL) {
         if(node->color == RB_BLACK)
             deep++;
@@ -124,13 +125,13 @@ bool checkTree(struct rbtree *tree) {
 
 TEST(TestRBTree, Insert) {
     int v[15] = {5,14,2,6,15,3,1,13,12,10,9,4,11,8,7};
-    struct rbtree_node nodes[15];
-    struct rbtree tree;
+    rbtree_node nodes[15];
+    rbtree_tree tree;
 
     base = nodes;
     rbtree_init(&tree);
     for(int i = 0; i < 15; i++) {
-        struct rbtree_node *node = nodes + i;
+        rbtree_node *node = nodes + i;
         node->s = i;
         node->v = v[i];
         rbtree_insert(&tree, node);
@@ -141,13 +142,13 @@ TEST(TestRBTree, Insert) {
 
 TEST(TestRBTree, Delete) {
     int v[15] = {5,14,2,6,15,3,1,13,12,10,9,4,11,8,7};
-    struct rbtree_node nodes[15];
-    struct rbtree tree;
+    rbtree_node nodes[15];
+    rbtree_tree tree;
     setTestTree(&tree, v, nodes, 15);
 
     for(int i = 0; i < 15; i++) {
         int t = v[i];
-        struct rbtree_node *d;
+        rbtree_node *d;
         d = rbtree_find(&tree, t);
         ASSERT_TRUE(d != NULL);
         rbtree_delete(&tree, d);
@@ -160,13 +161,13 @@ TEST(TestRBTree, Delete) {
 
 TEST(TestRBTree, PrevNext) {
     int v[10] = {9,8,7,6,5,4,3,2,1,0};
-    struct rbtree_node nodes[10];
-    struct rbtree tree;
+    rbtree_node nodes[10];
+    rbtree_tree tree;
     setTestTree(&tree, v, nodes, 10);
     ASSERT_TRUE(checkTree(&tree));
 
     std::vector<int> r;
-    struct rbtree_node *node;
+    rbtree_node *node;
     std::sort(v, v + 10);
 
     node = rbtree_min(&tree);
@@ -189,20 +190,20 @@ TEST(TestRBTree, PrevNext) {
 
 TEST(TestRBTree, FindLower) {
     int v[5] = {5,3,1,9,7};
-    struct rbtree_node nodes[5];
-    struct rbtree tree;
+    rbtree_node nodes[5];
+    rbtree_tree tree;
     setTestTree(&tree, v, nodes, 5);
 
     // test find
     for(int i = 0; i < 5; i++) {
-        struct rbtree_node *node = rbtree_find(&tree, v[i]);
+        rbtree_node *node = rbtree_find(&tree, v[i]);
         EXPECT_EQ(v[i], node->v);
     }
     EXPECT_TRUE(rbtree_find(&tree, 12) == NULL);
     EXPECT_TRUE(rbtree_find(&tree, -2) == NULL);
 
     // test lower
-    struct rbtree_node *n;
+    rbtree_node *n;
     n = rbtree_lower(&tree, 0);
     EXPECT_TRUE(n != NULL);
     EXPECT_EQ(1, n->v);
