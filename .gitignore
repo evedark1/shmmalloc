@@ -2,4 +2,3 @@
 *.swp
 *.[od]
 .vscode/
-build/
